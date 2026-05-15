@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+<meta name="theme-color" content="#0F1E3D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="JNHC-MRA">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<meta name="description" content="訪問看護ステーションの営業・採用・教育を5分で把握する現在地スコアチェック">
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<title>訪問看護ステーション 3部門現在地スコアチェック｜営業・採用・教育</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0F1E3D;
+    --navy-deep: #060E20;
+    --gold: #C4A35A;
+    --gold-light: #E5D4A1;
+    --gold-pale: #F5EBC7;
+    --cream: #FAF7EE;
+    --paper: #FFFCF4;
+    --line: #D9CDA8;
+    --red: #B8453A;
+    --teal: #2D6E5C;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--cream);
+    color: var(--navy);
+    line-height: 1.8;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .container {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+  }
+
+  header {
+    text-align: center;
+    padding: 60px 20px 50px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 50px;
+    position: relative;
+  }
+  
+  header::before {
+    content: "";
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60px;
+    height: 1px;
+    background: var(--gold);
+  }
+  
+  header::after {
+    content: "";
+    position: absolute;
+    bottom: -1px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 3px;
+    background: var(--gold);
+  }
+
+  .brand {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 13px;
+    letter-spacing: 0.4em;
+    color: var(--gold);
+    margin-bottom: 18px;
+    font-weight: 500;
+  }
+
+  h1 {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 32px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+    color: var(--navy);
+    line-height: 1.5;
+  }
+
+  .subtitle {
+    font-size: 14px;
+    color: #555;
+    letter-spacing: 0.1em;
+    font-weight: 400;
+  }
+
+  .section {
+    margin-bottom: 50px;
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 36px 32px;
+    border-left: 3px solid var(--gold);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: flex-end;
+    gap: 18px;
+    margin-bottom: 32px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .section-num {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gold);
+    letter-spacing: 0.3em;
+    line-height: 1;
+    padding-bottom: 4px;
+    border-bottom: 2px solid var(--gold);
+    flex-shrink: 0;
+  }
+
+  .section-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .section-category {
+    font-size: 11px;
+    color: #888;
+    letter-spacing: 0.2em;
+    font-weight: 500;
+    text-transform: uppercase;
+  }
+
+  .section-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 24px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    line-height: 1.3;
+  }
+
+  .sp-only { display: none; }
+  @media (max-width: 600px) {
+    .sp-only { display: inline; }
+    h1 { font-size: 26px !important; }
+    .section { padding: 28px 22px !important; }
+    .section-title { font-size: 20px !important; }
+  }
+
+  .question {
+    margin-bottom: 28px;
+  }
+
+  .question:last-child { margin-bottom: 0; }
+
+  .question-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--navy);
+    margin-bottom: 14px;
+    line-height: 1.7;
+    letter-spacing: 0.02em;
+  }
+
+  .question-label .qnum {
+    font-family: 'Noto Serif JP', serif;
+    color: var(--gold);
+    font-weight: 600;
+    margin-right: 8px;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    padding: 13px 16px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .option:hover {
+    border-color: var(--gold);
+    background: var(--gold-pale);
+  }
+
+  .option input {
+    margin-right: 12px;
+    accent-color: var(--gold);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .option.selected {
+    background: var(--gold-pale);
+    border-color: var(--gold);
+    border-left: 4px solid var(--gold);
+    font-weight: 500;
+  }
+
+  .submit-btn {
+    display: block;
+    width: 100%;
+    max-width: 360px;
+    margin: 50px auto 0;
+    padding: 18px 32px;
+    background: var(--navy);
+    color: var(--gold-light);
+    border: none;
+    border-radius: 3px;
+    font-size: 16px;
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+
+  .submit-btn::before {
+    content: "";
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    border: 1px solid var(--gold);
+    pointer-events: none;
+  }
+
+  .submit-btn:hover {
+    background: var(--navy-deep);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(15,30,61,0.25);
+  }
+
+  .submit-btn:disabled {
+    background: #999;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* ============================================
+     結果表示
+     ============================================ */
+  .result {
+    display: none;
+    background: var(--navy);
+    color: var(--paper);
+    padding: 50px 32px;
+    border-radius: 4px;
+    margin-top: 40px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light), var(--gold));
+  }
+
+  .result.show { display: block; animation: fadeIn 0.6s ease; }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 26px;
+    text-align: center;
+    margin-bottom: 8px;
+    color: var(--gold-light);
+    letter-spacing: 0.1em;
+  }
+
+  .result-subtitle {
+    text-align: center;
+    font-size: 13px;
+    color: var(--gold-pale);
+    margin-bottom: 36px;
+    letter-spacing: 0.2em;
+  }
+
+  .lv-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 36px;
+  }
+
+  @media (max-width: 600px) {
+    .lv-cards { grid-template-columns: 1fr; }
+  }
+
+  .lv-card {
+    background: rgba(255,252,244,0.08);
+    border: 1px solid rgba(196,163,90,0.4);
+    padding: 22px 16px;
+    border-radius: 3px;
+    text-align: center;
+    position: relative;
+  }
+
+  .lv-card-dept {
+    font-size: 13px;
+    color: var(--gold-pale);
+    margin-bottom: 12px;
+    letter-spacing: 0.1em;
+  }
+
+  .lv-card-value {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 38px;
+    font-weight: 600;
+    color: var(--gold-light);
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+
+  .lv-card-value-prefix {
+    font-size: 14px;
+    color: var(--gold);
+    margin-right: 2px;
+  }
+
+  .lv-card-max {
+    font-size: 12px;
+    color: rgba(245,235,199,0.5);
+  }
+
+  .lv-bar {
+    margin-top: 14px;
+    height: 4px;
+    background: rgba(255,252,244,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .lv-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light));
+    border-radius: 2px;
+    transition: width 1.2s cubic-bezier(0.65, 0, 0.35, 1);
+  }
+
+  .summary-box {
+    background: rgba(196,163,90,0.1);
+    border-left: 3px solid var(--gold);
+    padding: 22px 24px;
+    margin-bottom: 24px;
+    border-radius: 0 3px 3px 0;
+  }
+
+  .summary-box.weakest {
+    background: rgba(184,69,58,0.12);
+    border-left-color: var(--red);
+  }
+
+  .summary-label {
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 0.2em;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .summary-box.weakest .summary-label {
+    color: #E89E96;
+  }
+
+  .summary-value {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 18px;
+    color: var(--paper);
+    font-weight: 500;
+    line-height: 1.6;
+  }
+
+  .summary-note {
+    font-size: 13px;
+    color: var(--gold-pale);
+    margin-top: 10px;
+    line-height: 1.7;
+  }
+
+  .total-display {
+    text-align: center;
+    padding: 24px 0;
+    border-top: 1px solid rgba(196,163,90,0.3);
+    border-bottom: 1px solid rgba(196,163,90,0.3);
+    margin: 24px 0;
+  }
+
+  .total-label {
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 0.2em;
+    margin-bottom: 10px;
+  }
+
+  .total-value {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 42px;
+    color: var(--gold-light);
+    font-weight: 600;
+  }
+
+  .total-max {
+    font-size: 16px;
+    color: var(--gold-pale);
+    margin-left: 4px;
+  }
+
+  .cta-area {
+    margin-top: 36px;
+    text-align: center;
+  }
+
+  .cta-text {
+    font-size: 14px;
+    color: var(--gold-pale);
+    margin-bottom: 20px;
+    line-height: 1.8;
+  }
+
+  .cta-btn {
+    display: inline-block;
+    padding: 14px 32px;
+    background: var(--gold);
+    color: var(--navy);
+    text-decoration: none;
+    border-radius: 3px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    margin: 6px;
+    transition: all 0.3s ease;
+    font-size: 14px;
+  }
+
+  .cta-btn:hover {
+    background: var(--gold-light);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(196,163,90,0.3);
+  }
+
+  .cta-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold-light);
+  }
+
+  .cta-btn.secondary:hover {
+    background: rgba(196,163,90,0.15);
+  }
+
+  .progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--line);
+    z-index: 100;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold), var(--gold-light));
+    width: 0%;
+    transition: width 0.3s ease;
+  }
+
+  .reset-btn {
+    display: block;
+    margin: 24px auto 0;
+    background: none;
+    border: none;
+    color: var(--gold-pale);
+    font-size: 12px;
+    text-decoration: underline;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+  }
+
+  .footer-note {
+    text-align: center;
+    margin-top: 50px;
+    padding-top: 30px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: #888;
+    line-height: 2;
+  }
+
+  /* レーダーチャート */
+  .chart-container {
+    background: rgba(255,252,244,0.05);
+    border-radius: 3px;
+    padding: 24px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+
+  .chart-title {
+    font-size: 12px;
+    color: var(--gold);
+    letter-spacing: 0.2em;
+    margin-bottom: 16px;
+  }
+
+  /* ============================================
+     PWAインストールバナー
+     ============================================ */
+  .install-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--navy);
+    color: var(--paper);
+    padding: 16px 20px;
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+    border-top: 2px solid var(--gold);
+  }
+
+  .install-banner-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .install-banner-text strong {
+    color: var(--gold-light);
+    display: block;
+    margin-bottom: 2px;
+    font-size: 14px;
+  }
+
+  .install-banner-btn {
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    padding: 10px 18px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    flex-shrink: 0;
+  }
+
+  .install-banner-btn:hover {
+    background: var(--gold-light);
+  }
+
+  .install-banner-close {
+    background: transparent;
+    border: 1px solid rgba(196,163,90,0.4);
+    color: var(--gold-pale);
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  /* iOS用バナー（手動追加案内） */
+  .ios-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--navy);
+    color: var(--paper);
+    padding: 16px 20px;
+    display: none;
+    align-items: center;
+    gap: 12px;
+    z-index: 1000;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.2);
+    border-top: 2px solid var(--gold);
+  }
+  .ios-banner-content {
+    flex: 1;
+    font-size: 12px;
+    line-height: 1.6;
+  }
+  .ios-banner-content strong {
+    color: var(--gold-light);
+    display: block;
+    margin-bottom: 4px;
+    font-size: 13px;
+  }
+  .ios-share-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar">
+  <div class="progress-bar-fill" id="progressBar"></div>
+</div>
+
+<div class="container">
+
+  <header>
+    <div class="brand">JNHC-MRA｜全国訪問看護経営研究協会</div>
+    <h1>3部門 現在地<br class="sp-only">スコアチェック</h1>
+    <p class="subtitle">営業 ・ 採用 ・ 教育 ／ 5分で「いま」がわかる</p>
+  </header>
+
+  <form id="checkForm">
+
+    <!-- セクション1：営業 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">01</div>
+        <div class="section-title-group">
+          <div class="section-category">SALES</div>
+          <div class="section-title">🔴 営業｜紹介元との関係</div>
+        </div>
+      </div>
+
+      <div class="question" data-q="sales1">
+        <div class="question-label"><span class="qnum">Q1.</span>月間新規依頼件数（直近3ヶ月平均）</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="sales1" value="1">0〜3件</label>
+          <label class="option"><input type="radio" name="sales1" value="2">4〜6件</label>
+          <label class="option"><input type="radio" name="sales1" value="3">7〜9件</label>
+          <label class="option"><input type="radio" name="sales1" value="4">10件以上</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="sales2">
+        <div class="question-label"><span class="qnum">Q2.</span>主要紹介元（月1件以上依頼してくれる紹介元）の社数</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="sales2" value="1">1〜2社（1社依存に近い）</label>
+          <label class="option"><input type="radio" name="sales2" value="2">3〜5社</label>
+          <label class="option"><input type="radio" name="sales2" value="3">5〜10社</label>
+          <label class="option"><input type="radio" name="sales2" value="4">10社以上</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="sales3">
+        <div class="question-label"><span class="qnum">Q3.</span>代表以外に「営業を仕切れる人」はいるか</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="sales3" value="1">いない・代表が全部やっている</label>
+          <label class="option"><input type="radio" name="sales3" value="2">管理者やスタッフが空き時間に営業に出る</label>
+          <label class="option"><input type="radio" name="sales3" value="3">連携室担当または営業担当が1名いて回している</label>
+          <label class="option"><input type="radio" name="sales3" value="4">営業担当が企画・改善まで自走している</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="sales4">
+        <div class="question-label"><span class="qnum">Q4.</span>「まずあなたに頼みたい」と指名されるケアマネの社数</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="sales4" value="1">いない or 把握していない</label>
+          <label class="option"><input type="radio" name="sales4" value="2.5">1〜2社</label>
+          <label class="option"><input type="radio" name="sales4" value="4">3社以上</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- セクション2：採用 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">02</div>
+        <div class="section-title-group">
+          <div class="section-category">RECRUITING</div>
+          <div class="section-title">🟠 採用｜応募と定着</div>
+        </div>
+      </div>
+
+      <div class="question" data-q="recruit1">
+        <div class="question-label"><span class="qnum">Q5.</span>年間応募数（紹介会社経由を除く）</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="recruit1" value="1">0〜2件</label>
+          <label class="option"><input type="radio" name="recruit1" value="2.5">3〜4件</label>
+          <label class="option"><input type="radio" name="recruit1" value="4">5件以上</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="recruit2">
+        <div class="question-label"><span class="qnum">Q6.</span>直近12ヶ月の離職率</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="recruit2" value="1">30%以上</label>
+          <label class="option"><input type="radio" name="recruit2" value="2">20〜30%</label>
+          <label class="option"><input type="radio" name="recruit2" value="3">10〜20%</label>
+          <label class="option"><input type="radio" name="recruit2" value="4">10%未満</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="recruit3">
+        <div class="question-label"><span class="qnum">Q7.</span>採用ルートの数</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="recruit3" value="1">紹介会社・知人紹介のみ</label>
+          <label class="option"><input type="radio" name="recruit3" value="2">求人媒体1〜2個</label>
+          <label class="option"><input type="radio" name="recruit3" value="3">求人媒体＋SNS＋自社HP求人ページなど3つ以上</label>
+          <label class="option"><input type="radio" name="recruit3" value="4">多チャネル運用＋応募者からの逆指名がある</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="recruit4">
+        <div class="question-label"><span class="qnum">Q8.</span>「なぜここで働くのか」の言語化レベル</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="recruit4" value="1">できていない</label>
+          <label class="option"><input type="radio" name="recruit4" value="2">代表だけ言語化できている</label>
+          <label class="option"><input type="radio" name="recruit4" value="3">採用ページや求人原稿に反映している</label>
+          <label class="option"><input type="radio" name="recruit4" value="4">スタッフ全員が30秒で説明できる</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- セクション3：教育 -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-num">03</div>
+        <div class="section-title-group">
+          <div class="section-category">EDUCATION</div>
+          <div class="section-title">🟡 教育｜新人育成体制</div>
+        </div>
+      </div>
+
+      <div class="question" data-q="edu1">
+        <div class="question-label"><span class="qnum">Q9.</span>新人の独り立ちまでの平均期間</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="edu1" value="1">6ヶ月以上</label>
+          <label class="option"><input type="radio" name="edu1" value="2">4〜6ヶ月</label>
+          <label class="option"><input type="radio" name="edu1" value="3">3ヶ月程度（根拠ある期間設定あり）</label>
+          <label class="option"><input type="radio" name="edu1" value="4">3ヶ月以内</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="edu2">
+        <div class="question-label"><span class="qnum">Q10.</span>教育マニュアル・オリエン資料の整備状況</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="edu2" value="1">ない</label>
+          <label class="option"><input type="radio" name="edu2" value="2">マニュアルだけある</label>
+          <label class="option"><input type="radio" name="edu2" value="3">マニュアル＋オリエン資料＋振り返りの場がある</label>
+          <label class="option"><input type="radio" name="edu2" value="4">全部整備されており代表ノータッチで回る</label>
+        </div>
+      </div>
+
+      <div class="question" data-q="edu3">
+        <div class="question-label"><span class="qnum">Q11.</span>代表・管理者以外の「教育担当」の状態</div>
+        <div class="options">
+          <label class="option"><input type="radio" name="edu3" value="1">いない</label>
+          <label class="option"><input type="radio" name="edu3" value="2">1名いるが代表が最終的に見ている</label>
+          <label class="option"><input type="radio" name="edu3" value="3">1名以上いて教育が標準化されつつある</label>
+          <label class="option"><input type="radio" name="edu3" value="4">教育担当が完全自走している</label>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="submit-btn" id="submitBtn" disabled>現在地を見る</button>
+  </form>
+
+  <!-- 結果表示エリア -->
+  <div class="result" id="resultArea">
+    <div class="result-title">あなたのステーションの「いま」</div>
+    <p class="result-subtitle">CURRENT STATUS — 3 DEPARTMENTS</p>
+
+    <div class="lv-cards">
+      <div class="lv-card">
+        <div class="lv-card-dept">🔴 営業</div>
+        <div class="lv-card-value"><span class="lv-card-value-prefix">Lv</span><span id="salesLv">0</span></div>
+        <div class="lv-card-max">/ Lv4</div>
+        <div class="lv-bar"><div class="lv-bar-fill" id="salesBar"></div></div>
+      </div>
+      <div class="lv-card">
+        <div class="lv-card-dept">🟠 採用</div>
+        <div class="lv-card-value"><span class="lv-card-value-prefix">Lv</span><span id="recruitLv">0</span></div>
+        <div class="lv-card-max">/ Lv4</div>
+        <div class="lv-bar"><div class="lv-bar-fill" id="recruitBar"></div></div>
+      </div>
+      <div class="lv-card">
+        <div class="lv-card-dept">🟡 教育</div>
+        <div class="lv-card-value"><span class="lv-card-value-prefix">Lv</span><span id="eduLv">0</span></div>
+        <div class="lv-card-max">/ Lv4</div>
+        <div class="lv-bar"><div class="lv-bar-fill" id="eduBar"></div></div>
+      </div>
+    </div>
+
+    <div class="total-display">
+      <div class="total-label">TOTAL SCORE</div>
+      <div class="total-value"><span id="totalLv">0</span><span class="total-max">/ 12</span></div>
+    </div>
+
+    <!-- レーダーチャート -->
+    <div class="chart-container">
+      <div class="chart-title">3部門バランス</div>
+      <canvas id="radarChart" width="280" height="280" style="max-width:100%;"></canvas>
+    </div>
+
+    <div class="summary-box weakest">
+      <div class="summary-label">⚠ あなたの最弱部門</div>
+      <div class="summary-value" id="weakestText">—</div>
+      <div class="summary-note">年商1億円到達には全部門Lv3以上が前提です。<br>最弱部門が、あなたのステーション全体の天井を決めます。</div>
+    </div>
+
+    <div class="summary-box">
+      <div class="summary-label">◆ 現状判定</div>
+      <div class="summary-value" id="stageText">—</div>
+    </div>
+
+    <div class="cta-area">
+      <p class="cta-text">
+        「いま」が見えたら、次にやることが見えてきます。<br>
+        ひとりで抱え込まず、まず話してみませんか？
+      </p>
+      <a href="https://timerex.net/s/s2525keita3_0912/470321af" target="_blank" class="cta-btn">無料個別相談を予約する</a>
+      <a href="https://jnhc-mra-lp-2026.vercel.app/" target="_blank" class="cta-btn secondary">JNHC-MRA協会を見る</a>
+    </div>
+
+    <button class="reset-btn" onclick="resetForm()">もう一度チェックする</button>
+  </div>
+
+  <div class="footer-note">
+    JNHC-MRA｜全国訪問看護経営研究協会<br>
+    本シートは協会会員専用の自己点検ツールです
+  </div>
+
+</div>
+
+<!-- Android向けインストールバナー -->
+<div class="install-banner" id="installBanner">
+  <div class="install-banner-text">
+    <strong>📱 アプリとして追加</strong>
+    ホーム画面に追加していつでもチェックできます
+  </div>
+  <button class="install-banner-btn" onclick="triggerInstall()">追加する</button>
+  <button class="install-banner-close" onclick="hideInstallBanner()">×</button>
+</div>
+
+<!-- iOS向け手動追加案内バナー -->
+<div class="ios-banner" id="iosBanner">
+  <div class="ios-banner-content">
+    <strong>📱 ホーム画面に追加できます</strong>
+    Safari下部の
+    <svg class="ios-share-icon" width="14" height="18" viewBox="0 0 14 18" fill="#C4A35A">
+      <path d="M7 0L3 4h3v8h2V4h3L7 0zm5 11v5H2v-5H0v5c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2v-5h-2z"/>
+    </svg>
+    から「ホーム画面に追加」を選択
+  </div>
+  <button class="install-banner-close" onclick="dismissIosBanner()">×</button>
+</div>
+
+<script>
+  // 選択肢の見た目変更
+  document.querySelectorAll('.option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      const input = opt.querySelector('input');
+      const name = input.name;
+      document.querySelectorAll(`input[name="${name}"]`).forEach(i => {
+        i.closest('.option').classList.remove('selected');
+      });
+      opt.classList.add('selected');
+      input.checked = true;
+      updateProgress();
+    });
+  });
+
+  // 進捗バー更新
+  function updateProgress() {
+    const total = 11;
+    const answered = document.querySelectorAll('input[type="radio"]:checked').length;
+    const percent = (answered / total) * 100;
+    document.getElementById('progressBar').style.width = percent + '%';
+    document.getElementById('submitBtn').disabled = answered < total;
+  }
+
+  // 診断実行
+  document.getElementById('submitBtn').addEventListener('click', () => {
+    const getVal = name => parseFloat(document.querySelector(`input[name="${name}"]:checked`).value);
+
+    const salesAvg = (getVal('sales1') + getVal('sales2') + getVal('sales3') + getVal('sales4')) / 4;
+    const recruitAvg = (getVal('recruit1') + getVal('recruit2') + getVal('recruit3') + getVal('recruit4')) / 4;
+    const eduAvg = (getVal('edu1') + getVal('edu2') + getVal('edu3')) / 3;
+
+    const salesLv = Math.round(salesAvg);
+    const recruitLv = Math.round(recruitAvg);
+    const eduLv = Math.round(eduAvg);
+    const totalLv = salesLv + recruitLv + eduLv;
+
+    document.getElementById('salesLv').textContent = salesLv;
+    document.getElementById('recruitLv').textContent = recruitLv;
+    document.getElementById('eduLv').textContent = eduLv;
+    document.getElementById('totalLv').textContent = totalLv;
+
+    // バー
+    setTimeout(() => {
+      document.getElementById('salesBar').style.width = (salesLv / 4 * 100) + '%';
+      document.getElementById('recruitBar').style.width = (recruitLv / 4 * 100) + '%';
+      document.getElementById('eduBar').style.width = (eduLv / 4 * 100) + '%';
+    }, 200);
+
+    // 最弱部門
+    const departments = [
+      { name: '営業', lv: salesLv, avg: salesAvg },
+      { name: '採用', lv: recruitLv, avg: recruitAvg },
+      { name: '教育', lv: eduLv, avg: eduAvg }
+    ];
+    departments.sort((a, b) => a.avg - b.avg);
+    document.getElementById('weakestText').textContent = `${departments[0].name}（Lv${departments[0].lv}）`;
+
+    // ステージ判定
+    let stage;
+    if (totalLv <= 5) stage = '年商〜500万圏（Lv1中心）｜紹介待ち経営からの脱却が最優先';
+    else if (totalLv <= 8) stage = '年商500〜700万圏（Lv2中心）｜仕組み化の入口に立っている段階';
+    else if (totalLv <= 11) stage = '年商700〜1,000万圏（Lv3中心）｜自走化への移行期';
+    else stage = '年商1億円達成圏（Lv4到達）｜トップステーション';
+    document.getElementById('stageText').textContent = stage;
+
+    // レーダーチャート描画
+    drawRadarChart(salesLv, recruitLv, eduLv);
+
+    // 結果表示
+    const resultArea = document.getElementById('resultArea');
+    resultArea.classList.add('show');
+    resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // レーダーチャート
+  function drawRadarChart(s, r, e) {
+    const canvas = document.getElementById('radarChart');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = 100;
+    
+    ctx.clearRect(0, 0, w, h);
+
+    // グリッド
+    ctx.strokeStyle = 'rgba(196,163,90,0.2)';
+    ctx.lineWidth = 1;
+    for (let lvl = 1; lvl <= 4; lvl++) {
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+        const r = (radius / 4) * lvl;
+        const x = cx + Math.cos(angle) * r;
+        const y = cy + Math.sin(angle) * r;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+    }
+    
+    // 軸線
+    ctx.strokeStyle = 'rgba(196,163,90,0.3)';
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      ctx.stroke();
+    }
+    
+    // データ描画
+    const values = [s, r, e];
+    const labels = ['営業', '採用', '教育'];
+    
+    ctx.fillStyle = 'rgba(229,212,161,0.35)';
+    ctx.strokeStyle = '#E5D4A1';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+      const r = (radius / 4) * values[i];
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    
+    // 頂点
+    ctx.fillStyle = '#C4A35A';
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+      const r = (radius / 4) * values[i];
+      const x = cx + Math.cos(angle) * r;
+      const y = cy + Math.sin(angle) * r;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // ラベル
+    ctx.fillStyle = '#F5EBC7';
+    ctx.font = '500 14px "Noto Sans JP", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < 3; i++) {
+      const angle = (Math.PI * 2 / 3) * i - Math.PI / 2;
+      const labelR = radius + 22;
+      const x = cx + Math.cos(angle) * labelR;
+      const y = cy + Math.sin(angle) * labelR;
+      ctx.fillText(labels[i], x, y);
+    }
+  }
+
+  // リセット
+  function resetForm() {
+    document.querySelectorAll('input[type="radio"]').forEach(i => i.checked = false);
+    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    document.getElementById('resultArea').classList.remove('show');
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('submitBtn').disabled = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+<script>
+  // ============================================
+  // PWA: Service Worker登録
+  // ============================================
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        .then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => console.log('SW registration failed:', err));
+    });
+  }
+
+  // ============================================
+  // PWA: ホーム画面追加プロンプト（Android向け）
+  // ============================================
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    showInstallBanner();
+  });
+
+  function showInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'flex';
+  }
+
+  function hideInstallBanner() {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  function triggerInstall() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choice) => {
+      deferredPrompt = null;
+      hideInstallBanner();
+    });
+  }
+
+  // iOSの場合：手動追加の案内を表示
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  }
+  function isInStandaloneMode() {
+    return ('standalone' in window.navigator) && window.navigator.standalone;
+  }
+
+  window.addEventListener('load', () => {
+    if (isIOS() && !isInStandaloneMode()) {
+      const iosBanner = document.getElementById('iosBanner');
+      if (iosBanner && !sessionStorage.getItem('iosBannerDismissed')) {
+        iosBanner.style.display = 'flex';
+      }
+    }
+  });
+
+  function dismissIosBanner() {
+    document.getElementById('iosBanner').style.display = 'none';
+    sessionStorage.setItem('iosBannerDismissed', 'true');
+  }
+</script>
+
+</body>
+</html>

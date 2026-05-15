@@ -1,0 +1,33 @@
+{
+  "name": "JNHC-MRA｜現在地スコアチェック",
+  "short_name": "JNHC-MRA",
+  "description": "訪問看護ステーションの営業・採用・教育を5分で把握",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FAF7EE",
+  "theme_color": "#0F1E3D",
+  "lang": "ja",
+  "categories": ["business", "productivity", "health"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

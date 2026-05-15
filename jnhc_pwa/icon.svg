@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 背景：ネイビーグラデーション -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F1E3D"/>
+      <stop offset="100%" stop-color="#060E20"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5D4A1"/>
+      <stop offset="50%" stop-color="#C4A35A"/>
+      <stop offset="100%" stop-color="#9B7D3D"/>
+    </linearGradient>
+  </defs>
+  
+  <!-- 背景角丸 -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  
+  <!-- 装飾コーナー（和モダン） -->
+  <path d="M 60 60 L 60 110 M 60 60 L 110 60" stroke="#C4A35A" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M 452 60 L 452 110 M 452 60 L 402 60" stroke="#C4A35A" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M 60 452 L 60 402 M 60 452 L 110 452" stroke="#C4A35A" stroke-width="3" fill="none" opacity="0.6"/>
+  <path d="M 452 452 L 452 402 M 452 452 L 402 452" stroke="#C4A35A" stroke-width="3" fill="none" opacity="0.6"/>
+  
+  <!-- 中央の円（装飾） -->
+  <circle cx="256" cy="256" r="180" stroke="#C4A35A" stroke-width="1" fill="none" opacity="0.3"/>
+  <circle cx="256" cy="256" r="160" stroke="#C4A35A" stroke-width="1" fill="none" opacity="0.5"/>
+  
+  <!-- J の文字 -->
+  <text x="256" y="320" font-family="Georgia, serif" font-size="240" font-weight="600" 
+        fill="url(#gold)" text-anchor="middle" letter-spacing="0">J</text>
+  
+  <!-- 下部ラベル -->
+  <text x="256" y="400" font-family="Helvetica, sans-serif" font-size="32" font-weight="500"
+        fill="#C4A35A" text-anchor="middle" letter-spacing="8">JNHC-MRA</text>
+  
+  <!-- 装飾ライン -->
+  <line x1="200" y1="415" x2="312" y2="415" stroke="#C4A35A" stroke-width="1" opacity="0.5"/>
+</svg>
