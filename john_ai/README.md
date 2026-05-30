@@ -1,10 +1,28 @@
 # john_ai
 
 Codex などのエージェントに使わせる前提のスキル置き場。
+ブランドは **JNHC / JNHC-MRA**（一般社団法人 全国訪問看護経営研究協会）。
 
 ## skills
 
-- [`image-gen/`](./image-gen/SKILL.md) — gpt-image による画像の生成・編集。
-  研修/セールスのスライド画像、YouTube サムネ、アイコン等。
+### [`image-gen/`](./image-gen/SKILL.md) — gpt-image による画像の生成・編集
 
-各スキルは `SKILL.md`(エージェント向けの使い方)と実行スクリプトで構成する。
+営業資料・YouTube サムネ・SNS 投稿などの画像を、エージェントが意図を汲んで
+ブランド準拠で作るためのスキル。
+
+```
+image-gen/
+├── SKILL.md                      # エージェント向けの使い方（入口）
+├── scripts/image_gen.py          # gpt-image CLI（generate / edit）
+├── styles/
+│   ├── jnhc-brand.md             # ★マスターのトンマナ（配色・フォント・ロゴ・植物モチーフ）
+│   ├── sales-slide.md            # セールス特化
+│   ├── youtube-thumb.md          # YouTube 運用
+│   └── sns-post.md               # SNS 運用
+├── docs/sales-deck-blueprint.md  # 営業資料の型・流れ（8ブロック）
+├── prompts/                      # コピペ用プロンプト集（営業/YouTube/SNS）
+└── assets/logo/                  # 公式ロゴ素材（手動ドロップ）
+```
+
+**鉄則**: 文字・数字・表は焼き込まず編集ソフトで後乗せ。gpt-image は背景・装飾・
+概念図・被写体だけ。ロゴは公式PNGを合成（再生成しない）。色は HEX 厳守。
