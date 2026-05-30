@@ -8,6 +8,56 @@
 
 ---
 
+## ★ 出演者（じょん）サムネの作り方 — 既定ワークフロー
+
+JNHC のブランドサムネは原則 **本人＝じょん（渋谷慶太）** の顔で作る。
+**顔は実写のまま。gpt-image で本人の顔を生成・改変しない**
+（理由・素材は [`assets/people/jon/README.md`](../assets/people/jon/README.md)）。
+
+手順:
+
+1. **背景だけ生成**（人物は出さない。コピーと本人を置く空きを作る）:
+   ```
+   A high-contrast YouTube thumbnail BACKGROUND (16:9), NO PEOPLE. A clean punchy
+   gradient from brand blue #10408F to teal-green #2E4A47 with a faint hexagon +
+   botanical motif, soft studio lighting. Leave the RIGHT third darker and clean
+   for a cut-out person to be placed later, and the LEFT two-thirds open for big
+   text. Crisp, modern, trustworthy. No text, no lettering, no logo, no people,
+   no watermark.
+   ```
+   ```bash
+   python ../scripts/image_gen.py generate \
+     --prompt "<上>" --size landscape --quality high --out out/yt-bg.png
+   ```
+2. **本人の切り抜きＰＮＧ**を用意（`assets/people/jon/jon-suit-cutout.png` 等）。
+3. **合成**（背景＋本人＋ロゴ）:
+   ```bash
+   python ../scripts/compose.py \
+     --bg out/yt-bg.png \
+     --fg ../assets/people/jon/jon-suit-cutout.png \
+     --fg-anchor bottom-right --fg-scale 0.98 \
+     --logo ../assets/logo/jnhc-horizontal-reverse.png \
+     --logo-anchor top-left --logo-scale 0.15 \
+     --size 1280x720 --out out/yt-thumb-base.png
+   ```
+4. **特大コピーを後乗せ**（Canva/Figma/Pillow）。左側の空きに13文字以内で。
+
+> トピックで衣装を選ぶ: 経営・採用・講座系 → スーツ／現場・看護系 → スクラブ。
+> スクラブ（黄緑）を使う回は背景を白〜淡色 or 低彩度ティールに寄せて色を馴染ませる。
+
+### 背景だけ差し替えたいとき（edit・顔は触らせない）
+本人写真の**背景のみ**をブランド色に替えたい場合の最終手段。顔が変わったら使わない。
+```bash
+python ../scripts/image_gen.py edit \
+  --image ../assets/people/jon/jon-suit-desk.jpg \
+  --prompt "Replace ONLY the plain wall background with a clean brand-blue #10408F to teal-green #2E4A47 gradient with a faint hexagon motif. Keep the person, face, pose, suit and laptop EXACTLY unchanged. Photographic, consistent lighting. No text, no logo." \
+  --out out/jon-desk-brandbg.png
+```
+
+---
+
+## 汎用（出演者を出さない回・イメージ用）
+
 ## 1. 人物アップ＋コピー空き（王道・高CTR）
 ```
 A high-contrast YouTube thumbnail BACKGROUND (16:9) for a Japanese home-visit

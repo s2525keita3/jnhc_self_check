@@ -5,6 +5,11 @@
 訪問看護の経営者・管理者・看護師に向けた、JNHC-MRA の YouTube サムネ作法。
 「世界一の YouTube 運用チーム」の結論を仕様に落としたもの。
 
+> **既定の出演者は じょん（渋谷慶太）本人**。顔は実写のまま使い、gpt-image で
+> 生成・改変しない。素材と手順は [`../assets/people/jon/README.md`](../assets/people/jon/README.md)
+> と [`../prompts/youtube.md`](../prompts/youtube.md) の「出演者サムネの作り方」。
+> 衣装はトピックで選ぶ — スーツ＝経営/採用/講座、スクラブ＝現場/看護。
+
 ---
 
 ## 0. 大前提 — 文字は焼き込まない

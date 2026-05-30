@@ -74,6 +74,24 @@ python john_ai/image-gen/scripts/image_gen.py edit \
 - 部分編集はマスクを使う: `--mask mask.png`。
   **マスクの透明(alpha=0)部分が編集対象**、不透明部分は保持される。
 
+### 合成(背景 ＋ 人物切り抜き ＋ ロゴ)
+
+`scripts/compose.py`。**出演者(じょん)サムネの既定の作り方**。gpt-image で背景を
+作り、本人の実写切り抜きとロゴを重ねる(顔は生成しない)。
+
+```bash
+python john_ai/image-gen/scripts/compose.py \
+  --bg out/yt-bg.png \
+  --fg john_ai/image-gen/assets/people/jon/jon-suit-cutout.png \
+  --fg-anchor bottom-right --fg-scale 0.98 \
+  --logo john_ai/image-gen/assets/logo/jnhc-horizontal-reverse.png \
+  --logo-anchor top-left --logo-scale 0.15 \
+  --size 1280x720 --out out/yt-thumb-base.png
+```
+
+> **人物(本人)の顔は gpt-image で生成・改変しない。** 実写の切り抜きを合成する。
+> 詳細: [`assets/people/jon/README.md`](assets/people/jon/README.md)。
+
 ## サイズ・プリセット
 
 | プリセット   | 実サイズ     | 用途の目安                         |
