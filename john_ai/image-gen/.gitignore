@@ -1,0 +1,5 @@
+# generated images are not committed
+out/
+*.png.tmp
+__pycache__/
+*.pyc
