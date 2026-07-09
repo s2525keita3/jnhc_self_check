@@ -636,6 +636,170 @@
     vertical-align: middle;
     margin: 0 2px;
   }
+
+  /* ============================================
+     ステーション名入力
+     ============================================ */
+  html { scroll-behavior: smooth; }
+
+  .station-field {
+    margin-bottom: 40px;
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 24px 32px;
+    border-left: 3px solid var(--gold);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .station-field label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    color: var(--navy);
+    letter-spacing: 0.05em;
+  }
+  .station-field input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font-size: 15px;
+    font-family: inherit;
+    background: #fff;
+    color: var(--navy);
+  }
+  .station-field input:focus {
+    outline: none;
+    border-color: var(--gold);
+    background: var(--gold-pale);
+  }
+  .station-field .hint {
+    font-size: 11px;
+    color: #999;
+    margin-top: 6px;
+    line-height: 1.6;
+  }
+
+  /* ============================================
+     やるべきことリスト
+     ============================================ */
+  .action-section {
+    display: none;
+    margin-top: 40px;
+    background: var(--paper);
+    border-radius: 4px;
+    padding: 40px 32px;
+    border-left: 3px solid var(--gold);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04);
+  }
+  .action-section.show { display: block; animation: fadeIn 0.6s ease; }
+
+  .action-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 6px;
+    color: var(--navy);
+    letter-spacing: 0.08em;
+  }
+  .action-subtitle {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    letter-spacing: 0.2em;
+    margin-bottom: 30px;
+  }
+
+  .action-dept { margin-bottom: 34px; }
+  .action-dept-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 6px;
+  }
+  .action-dept-name {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--navy);
+  }
+  .action-dept-lv { font-size: 12px; color: #777; }
+  .priority-badge {
+    background: var(--red);
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    letter-spacing: 0.1em;
+  }
+  .action-dept-goal {
+    font-size: 13px;
+    color: var(--teal);
+    font-weight: 500;
+    margin-bottom: 12px;
+  }
+
+  .action-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: #fff;
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .action-item:hover { border-color: var(--gold); }
+  .action-item input {
+    margin-top: 4px;
+    accent-color: var(--teal);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  .action-item.done {
+    background: var(--gold-pale);
+    opacity: 0.65;
+    text-decoration: line-through;
+  }
+
+  .action-tools {
+    margin-top: 30px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    text-align: center;
+  }
+  .tool-btn {
+    display: inline-block;
+    margin: 6px;
+    padding: 13px 26px;
+    border-radius: 3px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    border: none;
+    font-family: inherit;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  .tool-btn.primary { background: var(--navy); color: var(--gold-light); }
+  .tool-btn.primary:hover { background: var(--navy-deep); transform: translateY(-2px); box-shadow: 0 6px 14px rgba(15,30,61,0.25); }
+  .tool-btn.outline { background: #fff; border: 1px solid var(--navy); color: var(--navy); }
+  .tool-btn.outline:hover { background: var(--gold-pale); }
+  .tool-note {
+    font-size: 11px;
+    color: #999;
+    margin-top: 14px;
+    line-height: 1.9;
+  }
 </style>
 </head>
 <body>
@@ -651,6 +815,12 @@
     <h1>3部門 現在地<br class="sp-only">スコアチェック</h1>
     <p class="subtitle">営業 ・ 採用 ・ 教育 ／ 5分で「いま」がわかる</p>
   </header>
+
+  <div class="station-field">
+    <label for="stationName">ステーション名（任意）</label>
+    <input type="text" id="stationName" placeholder="例：訪問看護ステーション〇〇" maxlength="60" autocomplete="organization">
+    <div class="hint">ご記入いただくと、協会からのフォローがスムーズになります（無記入でも診断できます）</div>
+  </div>
 
   <form id="checkForm">
 
@@ -849,13 +1019,29 @@
     <div class="cta-area">
       <p class="cta-text">
         「いま」が見えたら、次にやることが見えてきます。<br>
-        ひとりで抱え込まず、まず話してみませんか？
+        現在地を踏まえて、やるべきことを確認しましょう。
       </p>
-      <a href="https://timerex.net/s/s2525keita3_0912/470321af" target="_blank" class="cta-btn">無料個別相談を予約する</a>
-      <a href="https://jnhc-mra-lp-2026.vercel.app/" target="_blank" class="cta-btn secondary">JNHC-MRA協会を見る</a>
+      <a href="#actionArea" class="cta-btn">📋 やるべきことを確認する</a>
     </div>
 
     <button class="reset-btn" onclick="resetForm()">もう一度チェックする</button>
+  </div>
+
+  <!-- やるべきことリスト -->
+  <div class="action-section" id="actionArea">
+    <div class="action-title">📋 あなたが次にやること</div>
+    <p class="action-subtitle">ACTION LIST — 現在地に合わせた処方箋</p>
+    <div id="actionList"></div>
+    <div class="action-tools">
+      <button class="tool-btn primary" onclick="downloadExcel()">📥 Excelでダウンロード</button>
+      <button class="tool-btn outline" onclick="mailToSelf()">✉️ 自分にメールで送る</button>
+      <button class="tool-btn outline" onclick="mailToJohn()">📣 ジョンに結果を知らせる</button>
+      <div class="tool-note">
+        Excelにはこのチェックリストがそのまま入ります。<br>
+        診断結果をジョンに知らせておくと、ウェビナーや個別のやり取りでフォローを受けやすくなります。<br>
+        ※診断結果は協会のサポート品質向上のため記録されます
+      </div>
+    </div>
   </div>
 
   <div class="footer-note">
@@ -939,9 +1125,9 @@
 
     // 最弱部門
     const departments = [
-      { name: '営業', lv: salesLv, avg: salesAvg },
-      { name: '採用', lv: recruitLv, avg: recruitAvg },
-      { name: '教育', lv: eduLv, avg: eduAvg }
+      { key: 'sales', name: '営業', lv: salesLv, avg: salesAvg },
+      { key: 'recruit', name: '採用', lv: recruitLv, avg: recruitAvg },
+      { key: 'edu', name: '教育', lv: eduLv, avg: eduAvg }
     ];
     departments.sort((a, b) => a.avg - b.avg);
     document.getElementById('weakestText').textContent = `${departments[0].name}（Lv${departments[0].lv}）`;
@@ -957,9 +1143,30 @@
     // レーダーチャート描画
     drawRadarChart(salesLv, recruitLv, eduLv);
 
+    // 結果を保持（Excel・メール用）
+    const answers = {};
+    ['sales1','sales2','sales3','sales4','recruit1','recruit2','recruit3','recruit4','edu1','edu2','edu3'].forEach(n => {
+      answers[n] = getVal(n);
+    });
+    lastResult = {
+      station: document.getElementById('stationName').value.trim(),
+      salesLv, recruitLv, eduLv, totalLv, stage,
+      weakest: departments[0].name,
+      deptOrder: departments.map(d => d.key),
+      answers,
+      date: new Date()
+    };
+
+    // やるべきことリスト描画
+    renderActions();
+
+    // 診断結果を記録（協会サポート向上用・失敗しても診断は継続）
+    sendResult(lastResult);
+
     // 結果表示
     const resultArea = document.getElementById('resultArea');
     resultArea.classList.add('show');
+    document.getElementById('actionArea').classList.add('show');
     resultArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
@@ -1046,11 +1253,337 @@
     }
   }
 
+  // ============================================
+  // やるべきことリスト（現在Lv別の処方箋）
+  // ============================================
+  let lastResult = null;
+
+  const ACTIONS = {
+    sales: {
+      icon: '🔴', name: '営業',
+      basic: { goal: 'まず「関係の母数」をつくる', items: [
+        '営業先リスト50件を作る（居宅介護支援事業所・地域包括・病院連携室を地図からリストアップ）',
+        '週10件の定期訪問をカレンダーに固定する（まず数。質はその後）',
+        '手ぶら訪問をやめる：空き状況表＋パンフ＋季節の配布物を毎回持参する',
+        'FAX一斉送信だけに頼らず、対面・電話で「今週受けられる枠」を直接伝える',
+        '断られた理由・依頼が来ない理由をメモし、月1回見直す'
+      ]},
+      mid: { goal: '接点の「質」とランク分けへ', items: [
+        '紹介元をABCランクに分け（月1件以上=A／過去実績あり=B／未取引=C）、訪問頻度に差をつける',
+        '医療機関ルートを開拓：訪問診療医・病院MSWとの面談を月2件設定する（窓口は看護師管理者）',
+        '「診療所が訪看に聞きたい項目」（医療処置・看取り・オンコール・即応・報告方法）への回答を1枚にまとめる',
+        '新規依頼への即答率を測り、即答できなかった案件を週次で振り返る',
+        '主要紹介元トップ10に管理者自身が顔を出す'
+      ]},
+      high: { goal: '仕組み化と「指名」の獲得へ', items: [
+        '営業KPIを「訪問件数」から「新規依頼件数・指名社数」に変える',
+        '紹介元別の依頼件数を月次ダッシュボード化する',
+        '実績レター・事例レポートを四半期ごとに紹介元へ送付する',
+        '得意領域（精神・小児・看取り等）を明文化して発信し、指名ケアマネを増やす',
+        '営業の型を文書化し、2人目が同じ品質で回せる状態にする（属人化解除）'
+      ]}
+    },
+    recruit: {
+      icon: '🟠', name: '採用',
+      basic: { goal: '採用の土台（予算と受け皿）を固める', items: [
+        '採用予算を決める：1人採用に60〜120万円を覚悟し、事業計画に織り込む',
+        '自社HPの求人ページを作り込む（給与・オンコール・働き方を正確かつ詳細に）',
+        '「なぜここで働くのか」を代表が30秒で語れる形に言語化する',
+        'スカウト媒体に登録し、物量で打ち始める（月200通目安・外注も有効）',
+        '求人原稿が低品質のまま広告を打たない（原稿50点に広告は逆効果）'
+      ]},
+      mid: { goal: 'チャネルを広げ、辞退要因をつぶす', items: [
+        'スカウト月200通を継続し、開封率・返信率を記録する',
+        '土日勤務・オンコール・営業当番など「後出しになりがちな条件」を求人票の先頭側に書く（後出し辞退防止）',
+        '採用ルートを3つ以上に増やす（求人媒体＋スカウト＋自社HP）',
+        'Instagramで職場の中身を可視化する（リール中心。直接応募ではなく心理的ハードル緩和が目的）',
+        'スタッフに「あなたが優秀だと思う看護師は誰？」と聞き、リファラルの種をまく（2〜3ヶ月に1回の接点づくり）'
+      ]},
+      high: { goal: '面接の精度と定着で勝ち切る', items: [
+        '面接の型を作り、面接官を育てる（深掘り質問・理念の確認・クロージング）',
+        '応募→面接→内定→入職のファネルを計測し、どこで落ちているか特定する',
+        '内定辞退の理由を記録し、構造的な要因をつぶす',
+        '入職30日・90日の定着面談を仕組み化する',
+        'スタッフの声・実績をSNSのハイライトに蓄積する（採用ブランディング）'
+      ]}
+    },
+    edu: {
+      icon: '🟡', name: '教育',
+      basic: { goal: '「独り立ち」の定義から始める', items: [
+        '「独り立ち」の定義を決める（期間ではなく、できることのチェックリストで）',
+        '同行訪問の回数と卒業基準を明文化する',
+        'オリエン資料1枚（初日〜1週間の流れ）を作る',
+        '週1回15分の振り返り面談を固定する'
+      ]},
+      mid: { goal: '3点セットと標準化', items: [
+        'マニュアル＋オリエン資料＋振り返りの場の「3点セット」を完成させる',
+        '独り立ち3ヶ月の標準スケジュールを設計する（根拠ある期間設定）',
+        '教育担当を1名指名し、代表は週次報告を受けるだけにする',
+        'フィードバックはSBI（状況→行動→影響）の型で伝える'
+      ]},
+      high: { goal: '教育担当の自走化へ', items: [
+        '教育担当の自走化を支援する：「待つ・絞る・残す」（介入しすぎは再現性を壊す）',
+        '新人側アンケートで教育の質を測る',
+        'オリエン・技術指導を動画化し、教える時間を非同期化する',
+        '指導者を育てる（名プレイヤー≠名指導者。指導の型そのものを教える）'
+      ]}
+    }
+  };
+
+  const OTHER_ACTIONS = { icon: '⚫', name: '経営基盤（全ステーション共通）', goal: '数字と備えの土台', items: [
+    '稼働率を「件数」ではなく「訪問時間数」で管理する（目安62.5%／80%超は過負荷のサイン）',
+    '内部留保＝固定費の何ヶ月分あるかを把握する（目安4〜6ヶ月分）',
+    '加算の取得状況を棚卸しする（処遇改善・ベースアップ等。届出後の受理確認まで）',
+    '感染・災害BCPの初版を作る（意思決定ライン・利用者トリアージ・PPE備蓄量）',
+    '管理者の業務を毎月1つ手放す（記録は音声AI等で時短）',
+    '月次でPLを見る日をカレンダーに固定する'
+  ]};
+
+  function tierOf(lv) {
+    if (lv <= 1) return 'basic';
+    if (lv === 2) return 'mid';
+    return 'high';
+  }
+
+  function currentActionSet() {
+    // 最弱部門を先頭に、各部門の現在Lvに応じたアクションを返す
+    const lvMap = { sales: lastResult.salesLv, recruit: lastResult.recruitLv, edu: lastResult.eduLv };
+    const sets = lastResult.deptOrder.map((key, idx) => {
+      const lv = lvMap[key];
+      const tier = tierOf(lv);
+      const dept = ACTIONS[key];
+      return {
+        key, icon: dept.icon, name: dept.name, lv,
+        nextLabel: lv >= 4 ? '維持・型の言語化' : 'Lv' + (lv + 1) + 'へ',
+        goal: dept[tier].goal,
+        items: dept[tier].items,
+        priority: idx === 0
+      };
+    });
+    sets.push({ key: 'other', icon: OTHER_ACTIONS.icon, name: OTHER_ACTIONS.name, lv: null, nextLabel: '', goal: OTHER_ACTIONS.goal, items: OTHER_ACTIONS.items, priority: false });
+    return sets;
+  }
+
+  function renderActions() {
+    const wrap = document.getElementById('actionList');
+    wrap.innerHTML = '';
+    currentActionSet().forEach(set => {
+      const deptDiv = document.createElement('div');
+      deptDiv.className = 'action-dept';
+
+      const lvText = set.lv === null ? '' : '<span class="action-dept-lv">現在 Lv' + set.lv + ' → ' + set.nextLabel + '</span>';
+      const badge = set.priority ? '<span class="priority-badge">⚠ 最優先部門</span>' : '';
+      deptDiv.innerHTML =
+        '<div class="action-dept-header">' +
+          '<span class="action-dept-name">' + set.icon + ' ' + set.name + '</span>' + lvText + badge +
+        '</div>' +
+        '<div class="action-dept-goal">◆ ' + set.goal + '</div>';
+
+      set.items.forEach((text, i) => {
+        const id = set.key + '_' + i;
+        const label = document.createElement('label');
+        label.className = 'action-item';
+        label.innerHTML = '<input type="checkbox" data-aid="' + id + '"><span>' + text + '</span>';
+        const cb = label.querySelector('input');
+        cb.addEventListener('change', () => {
+          label.classList.toggle('done', cb.checked);
+          saveChecks();
+        });
+        deptDiv.appendChild(label);
+      });
+      wrap.appendChild(deptDiv);
+    });
+    restoreChecks();
+  }
+
+  // チェック状態の保存・復元（端末内のみ）
+  function saveChecks() {
+    const state = {};
+    document.querySelectorAll('#actionList input[type="checkbox"]').forEach(cb => {
+      state[cb.dataset.aid] = cb.checked;
+    });
+    try { localStorage.setItem('jnhcActionChecks', JSON.stringify(state)); } catch (e) {}
+  }
+  function restoreChecks() {
+    let state = {};
+    try { state = JSON.parse(localStorage.getItem('jnhcActionChecks') || '{}'); } catch (e) {}
+    document.querySelectorAll('#actionList input[type="checkbox"]').forEach(cb => {
+      if (state[cb.dataset.aid]) {
+        cb.checked = true;
+        cb.closest('.action-item').classList.add('done');
+      }
+    });
+  }
+
+  // ============================================
+  // 診断結果の記録（協会サポート向上用）
+  // ============================================
+  const SB_URL = 'https://ssgwnybmxeefkzldacmx.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzZ3dueWJteGVlZmt6bGRhY214Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0MTk2MjcsImV4cCI6MjA5MTk5NTYyN30.K16-O2gvfdEzgzQ4Fii_67oEc8EFGWB37xkI-Hae9n8';
+
+  function sendResult(r) {
+    try {
+      fetch(SB_URL + '/rest/v1/jnhc_self_check_results', {
+        method: 'POST',
+        headers: {
+          'apikey': SB_KEY,
+          'Authorization': 'Bearer ' + SB_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({
+          station_name: r.station || null,
+          sales_lv: r.salesLv,
+          recruit_lv: r.recruitLv,
+          edu_lv: r.eduLv,
+          total_lv: r.totalLv,
+          answers: r.answers
+        })
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  // ============================================
+  // Excelダウンロード（SheetJSを初回クリック時に読込）
+  // ============================================
+  function loadSheetJS() {
+    return new Promise((resolve, reject) => {
+      if (window.XLSX) return resolve();
+      const s = document.createElement('script');
+      s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  function fmtDate(d) {
+    return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+  }
+
+  async function downloadExcel() {
+    if (!lastResult) return;
+    try { await loadSheetJS(); } catch (e) {
+      alert('通信環境の良い場所でもう一度お試しください');
+      return;
+    }
+    const r = lastResult;
+    const wb = XLSX.utils.book_new();
+
+    // シート1：診断結果
+    const resultRows = [
+      ['訪問看護ステーション 3部門現在地スコアチェック'],
+      ['診断日', fmtDate(r.date)],
+      ['ステーション名', r.station || '（未記入）'],
+      [],
+      ['部門', 'レベル', '満点'],
+      ['🔴 営業', 'Lv' + r.salesLv, 'Lv4'],
+      ['🟠 採用', 'Lv' + r.recruitLv, 'Lv4'],
+      ['🟡 教育', 'Lv' + r.eduLv, 'Lv4'],
+      ['合計', r.totalLv + ' / 12', ''],
+      [],
+      ['最弱部門', r.weakest],
+      ['現状判定', r.stage],
+      [],
+      ['JNHC-MRA｜全国訪問看護経営研究協会']
+    ];
+    const ws1 = XLSX.utils.aoa_to_sheet(resultRows);
+    ws1['!cols'] = [{ wch: 18 }, { wch: 50 }, { wch: 8 }];
+    XLSX.utils.book_append_sheet(wb, ws1, '診断結果');
+
+    // シート2：やることリスト
+    const checkState = (() => {
+      try { return JSON.parse(localStorage.getItem('jnhcActionChecks') || '{}'); } catch (e) { return {}; }
+    })();
+    const listRows = [['部門', '現在地', 'No', 'アクション', '済']];
+    currentActionSet().forEach(set => {
+      set.items.forEach((text, i) => {
+        listRows.push([
+          set.icon + ' ' + set.name,
+          set.lv === null ? '共通' : 'Lv' + set.lv + ' → ' + set.nextLabel,
+          i + 1,
+          text,
+          checkState[set.key + '_' + i] ? '✔' : ''
+        ]);
+      });
+    });
+    const ws2 = XLSX.utils.aoa_to_sheet(listRows);
+    ws2['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 4 }, { wch: 80 }, { wch: 4 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'やることリスト');
+
+    const dateStr = r.date.getFullYear() + String(r.date.getMonth() + 1).padStart(2, '0') + String(r.date.getDate()).padStart(2, '0');
+    XLSX.writeFile(wb, '現在地チェック_' + (r.station || 'マイステーション') + '_' + dateStr + '.xlsx');
+  }
+
+  // ============================================
+  // メール送信（mailto）
+  // ============================================
+  function buildResultText(full) {
+    const r = lastResult;
+    let t = '【3部門現在地スコアチェック 結果】\n';
+    t += '診断日：' + fmtDate(r.date) + '\n';
+    if (r.station) t += 'ステーション名：' + r.station + '\n';
+    t += '\n';
+    t += '🔴 営業：Lv' + r.salesLv + ' / 4\n';
+    t += '🟠 採用：Lv' + r.recruitLv + ' / 4\n';
+    t += '🟡 教育：Lv' + r.eduLv + ' / 4\n';
+    t += '合計：' + r.totalLv + ' / 12\n\n';
+    t += '⚠ 最弱部門：' + r.weakest + '\n';
+    t += '◆ 現状判定：' + r.stage + '\n';
+    if (full) {
+      t += '\n──────────────\n【やることリスト】\n';
+      currentActionSet().forEach(set => {
+        t += '\n■ ' + set.name + (set.lv === null ? '' : '（現在 Lv' + set.lv + ' → ' + set.nextLabel + '）') + '\n';
+        set.items.forEach(item => { t += '□ ' + item + '\n'; });
+      });
+    }
+    t += '\nJNHC-MRA｜全国訪問看護経営研究協会\nhttps://jnhc-self-check.vercel.app/\n';
+    return t;
+  }
+
+  function buildShortText() {
+    // mailto用（URL長制限対策）：サマリー＋最優先部門のみ
+    const r = lastResult;
+    let t = '【3部門現在地スコアチェック 結果】\n';
+    t += '診断日：' + fmtDate(r.date) + (r.station ? '／' + r.station : '') + '\n';
+    t += '営業Lv' + r.salesLv + '・採用Lv' + r.recruitLv + '・教育Lv' + r.eduLv + '（合計' + r.totalLv + '/12）\n';
+    t += '最弱部門：' + r.weakest + '\n\n';
+    const top = currentActionSet()[0];
+    t += '■ 最優先：' + top.name + '（Lv' + top.lv + ' → ' + top.nextLabel + '）\n';
+    top.items.forEach(item => { t += '□ ' + item + '\n'; });
+    t += '\n※全部門のリストはアプリのExcelダウンロードで取得できます\nhttps://jnhc-self-check.vercel.app/\n';
+    return t;
+  }
+
+  async function mailToSelf() {
+    if (!lastResult) return;
+    const subject = '【現在地チェック】診断結果とやることリスト（' + fmtDate(lastResult.date) + '）';
+    // モバイル等はネイティブ共有（メール・LINE等に全文を送れる）
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: subject, text: buildResultText(true) });
+        return;
+      } catch (e) {
+        if (e && e.name === 'AbortError') return; // ユーザーがキャンセル
+      }
+    }
+    location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(buildShortText());
+  }
+
+  function mailToJohn() {
+    if (!lastResult) return;
+    const subject = '【現在地チェック】結果のご報告：' + (lastResult.station || 'ステーション名未記入');
+    let body = buildResultText(false);
+    body += '\n──────────────\nいま一番困っていること・相談したいこと：\n（ここに一言どうぞ）\n';
+    location.href = 'mailto:info@jnhc-mra.or.jp?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+  }
+
   // リセット
   function resetForm() {
     document.querySelectorAll('input[type="radio"]').forEach(i => i.checked = false);
     document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
     document.getElementById('resultArea').classList.remove('show');
+    document.getElementById('actionArea').classList.remove('show');
     document.getElementById('progressBar').style.width = '0%';
     document.getElementById('submitBtn').disabled = true;
     window.scrollTo({ top: 0, behavior: 'smooth' });

@@ -1,5 +1,5 @@
 // JNHC-MRA Self-Check PWA Service Worker
-const CACHE_NAME = 'jnhc-self-check-v1';
+const CACHE_NAME = 'jnhc-self-check-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -37,10 +37,14 @@ self.addEventListener('activate', event => {
 
 // フェッチ：キャッシュファースト戦略
 self.addEventListener('fetch', event => {
+  // GET以外（診断結果の送信POST等）とSupabase APIはキャッシュ対象外＝素通し
+  if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('supabase.co')) return;
+
   event.respondWith(
     caches.match(event.request).then(response => {
       return response || fetch(event.request).then(fetchResponse => {
-        // 動的にキャッシュを追加（フォント等）
+        // 動的にキャッシュを追加（フォント・SheetJS等）
         return caches.open(CACHE_NAME).then(cache => {
           if (event.request.url.startsWith('http')) {
             cache.put(event.request, fetchResponse.clone());
