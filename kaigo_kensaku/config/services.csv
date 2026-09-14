@@ -1,0 +1,3 @@
+service_name,short_name,service_cd,fields_file,site_label
+居宅介護支援,居宅,430,fields_kyotaku.csv,居宅介護支援
+訪問看護,訪看,130,fields_houkan.csv,訪問看護

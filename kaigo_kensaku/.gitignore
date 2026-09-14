@@ -1,0 +1,8 @@
+logs/
+dist/
+build/
+*.spec
+__pycache__/
+input_settings.json
+.__itakukaigokensaku.lock
+介護事業所一覧_*.xlsx
