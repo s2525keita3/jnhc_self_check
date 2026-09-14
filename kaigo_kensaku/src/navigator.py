@@ -20,7 +20,7 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import Select, WebDriverWait
 
 log = logging.getLogger(__name__)
 
@@ -168,37 +168,134 @@ class Navigator:
                 return True
         return False
 
+    # ------------------------------------------------------------ 選択部品
+    @staticmethod
+    def _clean(t: str) -> str:
+        """『西宮市 (123)』→『西宮市』のように件数表記を落とす。"""
+        t = (t or "").strip()
+        t = re.sub(r"[\s　]*[（(]\s*\d+\s*[)）]\s*$", "", t)
+        return t.strip()
+
+    def _match(self, text: str, target: str, exact: bool) -> bool:
+        t = self._clean(text)
+        return t == target if exact else (target in t)
+
+    def _pick(self, target: str, exact: bool = False) -> Optional[str]:
+        """画面上の『target』を選ぶ。チェックボックス／プルダウン／リンクの順に試す。
+
+        戻り値は選択できた部品の種類（checkbox / select / link）。見つからなければ None。
+        """
+        if self._check_label(target, exact):
+            return "checkbox"
+
+        for sel in self.driver.find_elements(By.TAG_NAME, "select"):
+            if not sel.is_displayed():
+                continue
+            for opt in sel.find_elements(By.TAG_NAME, "option"):
+                if self._match(opt.text, target, exact):
+                    try:
+                        Select(sel).select_by_visible_text(opt.text)
+                        self._sleep()
+                        return "select"
+                    except WebDriverException:
+                        pass
+
+        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
+            try:
+                if not a.is_displayed():
+                    continue
+                if self._match(a.text, target, exact):
+                    self.driver.execute_script("arguments[0].click();", a)
+                    self._sleep()
+                    self.dump(f"link_{target}")
+                    return "link"
+            except WebDriverException:
+                continue
+        return None
+
     # ------------------------------------------------------------ high level
     def open_search_screen(self):
         self.get(BASE_URL.format(code=self.pref_code))
         self._click_text(NAV["to_search"], required=False)
 
+    def describe_page(self) -> str:
+        """今開いている画面の作りを文章で書き出す（診断用）。"""
+        d = self.driver
+        out = [f"URL   : {d.current_url}", f"title : {d.title}"]
+
+        labels = [self._clean(e.text) for e in d.find_elements(By.XPATH, "//label")]
+        labels = [t for t in labels if t]
+        out.append(f"\n■ label要素 {len(labels)}個")
+        out.append("  " + " / ".join(labels[:60]) if labels else "  （なし）")
+
+        sels = d.find_elements(By.TAG_NAME, "select")
+        out.append(f"\n■ プルダウン {len(sels)}個")
+        for sel in sels[:6]:
+            opts = [self._clean(o.text) for o in sel.find_elements(By.TAG_NAME, "option")]
+            opts = [o for o in opts if o]
+            out.append(f"  name={sel.get_attribute('name')} 選択肢{len(opts)}個: "
+                       + " / ".join(opts[:30]))
+
+        inputs = d.find_elements(By.XPATH, "//input[@type='checkbox' or @type='radio']")
+        out.append(f"\n■ チェックボックス/ラジオ {len(inputs)}個")
+        for el in inputs[:30]:
+            out.append(f"  type={el.get_attribute('type')} name={el.get_attribute('name')} "
+                       f"value={el.get_attribute('value')} id={el.get_attribute('id')}")
+
+        links = []
+        for a in d.find_elements(By.XPATH, "//a[@href]"):
+            t = self._clean(a.text)
+            if t:
+                links.append(t)
+        out.append(f"\n■ リンク {len(links)}個")
+        out.append("  " + " / ".join(links[:80]))
+
+        btns = []
+        for xp in ("//button", "//input[@type='submit']", "//input[@type='button']"):
+            for e in d.find_elements(By.XPATH, xp):
+                t = self._clean(e.text) or (e.get_attribute("value") or "").strip()
+                if t:
+                    btns.append(t)
+        out.append(f"\n■ ボタン {len(btns)}個")
+        out.append("  " + " / ".join(btns[:40]))
+        return "\n".join(out)
+
     def list_cities(self) -> List[str]:
-        """検索画面に並んでいる市区町村名を取得する。"""
+        """検索画面に並んでいる市区町村名を取得する（label/option/リンクから）。"""
         self.open_search_screen()
-        names = []
-        for el in self.driver.find_elements(By.XPATH, "//label"):
-            t = (el.text or "").strip()
-            t = re.sub(r"\s*\(\d+\)\s*$", "", t)
-            t = re.sub(r"\s*（\d+）\s*$", "", t)
-            if re.search(r"(市|区|町|村)$", t) and 2 <= len(t) <= 12:
-                names.append(t)
+        texts = []
+        for xp in ("//label", "//option", "//a[@href]"):
+            for el in self.driver.find_elements(By.XPATH, xp):
+                texts.append(self._clean(el.text))
+        names = [t for t in texts if re.search(r"(市|区|町|村)$", t) and 2 <= len(t) <= 12]
         seen, out = set(), []
         for n in names:
             if n not in seen:
                 seen.add(n)
                 out.append(n)
-        log.debug("市区町村候補 %d件: %s", len(out), out[:10])
+        log.debug("市区町村候補 %d件: %s", len(out), out[:20])
         return out
 
     def search(self, city: str, service_label: str, exact: bool = False) -> None:
         """市区町村とサービス種別を指定して検索を実行する。"""
         self.open_search_screen()
-        if not self._check_label(city, exact):
-            raise SiteError(f"市区町村『{city}』が検索画面で見つかりません")
-        if not self._check_label(service_label, False):
-            log.warning("サービス種別『%s』のチェックが見つかりません。全件検索のまま進みます", service_label)
-        self._click_text(NAV["search_button"])
+        kind = self._pick(city, exact)
+        if kind is None:
+            raise SiteError(
+                f"市区町村『{city}』が検索画面で見つかりません"
+                f"（画面: {self.driver.current_url}）"
+            )
+        log.debug("市区町村『%s』を %s で選択", city, kind)
+
+        svc = self._pick(service_label, False)
+        if svc is None:
+            log.warning("サービス種別『%s』が見つかりません。全件のまま進みます", service_label)
+
+        if kind == "link" and svc is None:
+            # 市区町村リンクで既に一覧へ遷移しているとみなす
+            pass
+        else:
+            self._click_text(NAV["search_button"], required=False)
         try:
             WebDriverWait(self.driver, 30).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))

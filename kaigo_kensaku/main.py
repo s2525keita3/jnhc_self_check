@@ -77,6 +77,47 @@ def interactive(settings: cfg.Settings, prefs) -> cfg.Settings:
     return settings
 
 
+def diagnose(nav, settings: cfg.Settings, services) -> int:
+    """検索画面の作りを調べて logs/診断結果.txt に書き出す。"""
+    from src.navigator import BASE_URL
+
+    parts = []
+    print("\n検索画面の作りを調べています…\n")
+
+    nav.get(BASE_URL.format(code=nav.pref_code))
+    parts.append("=" * 70)
+    parts.append("【1】都道府県トップページ")
+    parts.append("=" * 70)
+    parts.append(nav.describe_page())
+
+    nav.open_search_screen()
+    parts.append("\n" + "=" * 70)
+    parts.append("【2】検索画面（事業所検索リンクをたどった後）")
+    parts.append("=" * 70)
+    parts.append(nav.describe_page())
+
+    city = (settings.cities_raw or "").split(",")[0].strip().rstrip("*")
+    if city and city.upper() != "ALL":
+        kind = nav._pick(city, False)
+        parts.append("\n" + "=" * 70)
+        parts.append(f"【3】『{city}』を選択した結果: {kind or '見つかりませんでした'}")
+        parts.append("=" * 70)
+        if kind:
+            parts.append(nav.describe_page())
+
+    text = "\n".join(parts)
+    out = os.path.join(settings.log_dir, "診断結果.txt")
+    os.makedirs(settings.log_dir, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(text[:3000])
+    print("\n" + "-" * 62)
+    print(f"診断結果を書き出しました:\n  {out}")
+    print("このファイルと logs\\html\\ の中身を送ってください。")
+    print("-" * 62)
+    return 0
+
+
 def run(settings: cfg.Settings, args) -> int:
     from src.navigator import Navigator, SiteError  # Selenium は実行時に読み込む
 
@@ -99,6 +140,8 @@ def run(settings: cfg.Settings, args) -> int:
         print("取得するサービス種別が指定されていません")
         return 2
 
+    if args.diagnose:
+        settings.dump_html = True
     dump_dir = os.path.join(settings.log_dir, "html") if settings.dump_html else None
     nav = Navigator(
         pref=settings.pref,
@@ -118,6 +161,9 @@ def run(settings: cfg.Settings, args) -> int:
     started = datetime.now()
     errors: list[str] = []
     try:
+        if args.diagnose:
+            return diagnose(nav, settings, list(services.values()))
+
         print(f"\n{settings.pref} の市区町村一覧を取得しています…")
         available = nav.list_cities()
         if args.list_cities:
@@ -225,6 +271,7 @@ def main() -> int:
     ap.add_argument("--no-resume", action="store_true")
     ap.add_argument("--restart", action="store_true", help="前回の進捗を破棄して最初から取得する")
     ap.add_argument("--list-cities", action="store_true", help="対象都道府県の市区町村一覧を表示する")
+    ap.add_argument("--diagnose", action="store_true", help="検索画面の作りを調べて logs に書き出す")
     args = ap.parse_args()
 
     settings = cfg.load_settings(BASE_DIR)
