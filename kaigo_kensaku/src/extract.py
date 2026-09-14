@@ -270,8 +270,14 @@ def lookup_value(lookup: str, h: Harvest, ctx: dict) -> Optional[str]:
     return h.kv.get(norm_label(lookup))
 
 
-def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True) -> dict:
-    """項目定義に従って1行ぶんの辞書を作る。"""
+def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True,
+              found: Optional[set] = None) -> dict:
+    """項目定義に従って1行ぶんの辞書を作る。
+
+    found を渡すと、ページ上で見出しが見つかった列名を追加する。
+    「整形した結果たまたま空欄」（営業時間の『時分～時分』など）と
+    「そもそも見出しが無い」（サイト構成の変更）を区別するために使う。
+    """
     row = {}
     for fd in fields:
         raw = ""
@@ -280,6 +286,8 @@ def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True) -> dict:
             if got not in (None, ""):
                 raw = got
                 break
+        if raw != "" and found is not None:
+            found.add(fd.column)
         row[fd.column] = apply_transform(raw, fd.transform, ctx, normalize)
     return row
 

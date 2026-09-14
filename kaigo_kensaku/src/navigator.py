@@ -18,6 +18,7 @@ from typing import Callable, Dict, List, Optional
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
@@ -51,9 +52,11 @@ class SiteError(RuntimeError):
 
 class Navigator:
     def __init__(self, pref: str, pref_code: str, display: bool, wait: float,
-                 retry: int, dump_dir: Optional[str] = None):
+                 retry: int, dump_dir: Optional[str] = None,
+                 base_url: Optional[str] = None):
         self.pref = pref
         self.pref_code = pref_code
+        self.base_url = base_url or os.environ.get("KAIGO_BASE_URL") or BASE_URL
         self.wait_sec = wait
         self.retry = retry
         self.dump_dir = dump_dir
@@ -71,7 +74,15 @@ class Navigator:
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--lang=ja-JP")
         opts.add_experimental_option("excludeSwitches", ["enable-logging"])
-        driver = webdriver.Chrome(options=opts)
+        # テスト環境向けの差し替え（通常は未設定でよい）
+        binary = os.environ.get("KAIGO_CHROME_BINARY")
+        if binary:
+            opts.binary_location = binary
+        driver_path = os.environ.get("KAIGO_CHROMEDRIVER")
+        if driver_path:
+            driver = webdriver.Chrome(service=Service(driver_path), options=opts)
+        else:
+            driver = webdriver.Chrome(options=opts)
         driver.set_page_load_timeout(60)
         return driver
 
@@ -180,10 +191,15 @@ class Navigator:
         t = self._clean(text)
         return t == target if exact else (target in t)
 
-    def _pick(self, target: str, exact: bool = False) -> Optional[str]:
-        """画面上の『target』を選ぶ。チェックボックス／プルダウン／リンクの順に試す。
+    def _pick(self, target: str, exact: bool = False,
+              allow_text: bool = False) -> Optional[str]:
+        """画面上の『target』を選ぶ。
 
-        戻り値は選択できた部品の種類（checkbox / select / link）。見つからなければ None。
+        チェックボックス → プルダウン →（allow_text なら）文字入力欄 → リンク
+        の順に試す。戻り値は選択できた部品の種類。見つからなければ None。
+
+        allow_text は市区町村を選ぶときだけ True にする。サービス種別で許すと、
+        市区町村の入力欄にサービス名を上書きしてしまうため。
         """
         if self._check_label(target, exact):
             return "checkbox"
@@ -200,22 +216,115 @@ class Navigator:
                     except WebDriverException:
                         pass
 
-        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-            try:
-                if not a.is_displayed():
+        if allow_text:
+            kind = self._fill_textbox(target)
+            if kind:
+                return kind
+
+        for strict in (True, False):
+            if strict is False and exact:
+                break
+            for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
+                try:
+                    if not a.is_displayed():
+                        continue
+                    if self._match(a.text, target, exact or strict):
+                        self.driver.execute_script("arguments[0].click();", a)
+                        self._sleep()
+                        self.dump(f"link_{target}")
+                        return "link"
+                except WebDriverException:
                     continue
-                if self._match(a.text, target, exact):
-                    self.driver.execute_script("arguments[0].click();", a)
-                    self._sleep()
-                    self.dump(f"link_{target}")
-                    return "link"
+        return None
+
+    def _fill_textbox(self, target: str) -> Optional[str]:
+        """『市区町村』などの文字入力欄があれば、そこに入力する。"""
+        pat = re.compile(r"(市区町村|市町村|地域|所在地|住所|エリア)")
+        for el in self.driver.find_elements(By.XPATH, "//input[@type='text' or not(@type)]"):
+            try:
+                if not el.is_displayed() or not el.is_enabled():
+                    continue
+                hint = " ".join(
+                    filter(None, [
+                        el.get_attribute("name"), el.get_attribute("id"),
+                        el.get_attribute("placeholder"), el.get_attribute("title"),
+                        el.get_attribute("aria-label"),
+                    ])
+                )
+                label_id = el.get_attribute("id")
+                if label_id:
+                    for lb in self.driver.find_elements(
+                        By.XPATH, f"//label[@for='{label_id}']"
+                    ):
+                        hint += " " + (lb.text or "")
+                if not pat.search(hint):
+                    continue
+                el.clear()
+                el.send_keys(target)
+                self._sleep()
+                log.debug("文字入力欄に『%s』を入力（%s）", target, hint.strip()[:40])
+                return "textbox"
             except WebDriverException:
                 continue
         return None
 
+    def _candidate_links(self) -> List[str]:
+        """市区町村の選択画面へ続きそうなリンクのURLを集める。"""
+        origin = self.base_url.format(code=self.pref_code).rsplit("/", 2)[0]
+        out = []
+        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
+            try:
+                t = self._clean(a.text)
+                href = a.get_attribute("href") or ""
+            except WebDriverException:
+                continue
+            if not t or not href.startswith(origin):
+                continue
+            if re.search(r"(検索|探す|事業所|サービス|地域|市区町村|エリア)", t):
+                out.append(href)
+        return list(dict.fromkeys(out))
+
+    def _find_city(self, city: str, exact: bool) -> Optional[str]:
+        """市区町村を選べる画面を探してたどり着き、選択する。
+
+        トップ→検索画面が1クリックとは限らないため、それらしいリンクを
+        2段までたどって探す。
+        """
+        self.get(self.base_url.format(code=self.pref_code))
+        kind = self._pick(city, exact, allow_text=True)
+        if kind:
+            return kind
+
+        self._click_text(NAV["to_search"], required=False)
+        kind = self._pick(city, exact, allow_text=True)
+        if kind:
+            return kind
+
+        seen = set()
+        frontier = self._candidate_links()
+        for _ in range(2):
+            nxt = []
+            for url in frontier[:8]:
+                if url in seen:
+                    continue
+                seen.add(url)
+                try:
+                    self.get(url)
+                except SiteError:
+                    continue
+                kind = self._pick(city, exact, allow_text=True)
+                if kind:
+                    log.info("市区町村を選べる画面: %s", url)
+                    return kind
+                nxt.extend(self._candidate_links())
+            frontier = [u for u in nxt if u not in seen]
+            if not frontier:
+                break
+        return None
+
     # ------------------------------------------------------------ high level
     def open_search_screen(self):
-        self.get(BASE_URL.format(code=self.pref_code))
+        self.get(self.base_url.format(code=self.pref_code))
         self._click_text(NAV["to_search"], required=False)
 
     def describe_page(self) -> str:
@@ -278,12 +387,12 @@ class Navigator:
 
     def search(self, city: str, service_label: str, exact: bool = False) -> None:
         """市区町村とサービス種別を指定して検索を実行する。"""
-        self.open_search_screen()
-        kind = self._pick(city, exact)
+        kind = self._find_city(city, exact)
         if kind is None:
             raise SiteError(
-                f"市区町村『{city}』が検索画面で見つかりません"
-                f"（画面: {self.driver.current_url}）"
+                f"市区町村『{city}』を選べる画面が見つかりません"
+                f"（最後に見た画面: {self.driver.current_url}）"
+                "／『診断する.bat』で画面の作りを確認してください"
             )
         log.debug("市区町村『%s』を %s で選択", city, kind)
 
@@ -307,9 +416,13 @@ class Navigator:
     def collect_listings(self, max_pages: int = 200) -> List[Listing]:
         """検索結果一覧から、事業所名と詳細ページURLを集める（ページ送り対応）。"""
         found: Dict[str, Listing] = {}
+        prev = -1
         for page in range(max_pages):
             for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-                href = a.get_attribute("href") or ""
+                try:
+                    href = a.get_attribute("href") or ""
+                except WebDriverException:
+                    continue
                 if not DETAIL_HREF.search(href):
                     continue
                 name = (a.text or "").strip()
@@ -319,6 +432,11 @@ class Navigator:
                 cd = m.group(1) if m else href
                 if cd not in found:
                     found[cd] = Listing(name=name, url=href, jigyosyo_cd=cd)
+            if len(found) == prev:
+                # このページで1件も増えなかった＝同じページに留まっている
+                log.debug("新規が無いためページ送りを打ち切り (%d件)", len(found))
+                break
+            prev = len(found)
             if not self._click_text(NAV["next_page"], required=False):
                 break
             log.debug("次ページへ (%d件取得済)", len(found))

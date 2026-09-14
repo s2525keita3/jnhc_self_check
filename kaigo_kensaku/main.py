@@ -79,12 +79,10 @@ def interactive(settings: cfg.Settings, prefs) -> cfg.Settings:
 
 def diagnose(nav, settings: cfg.Settings, services) -> int:
     """検索画面の作りを調べて logs/診断結果.txt に書き出す。"""
-    from src.navigator import BASE_URL
-
     parts = []
     print("\n検索画面の作りを調べています…\n")
 
-    nav.get(BASE_URL.format(code=nav.pref_code))
+    nav.get(nav.base_url.format(code=nav.pref_code))
     parts.append("=" * 70)
     parts.append("【1】都道府県トップページ")
     parts.append("=" * 70)
@@ -183,6 +181,7 @@ def run(settings: cfg.Settings, args) -> int:
         print(f"対象: {len(cities)}自治体 × {len(services)}サービス = {total}件の検索\n")
 
         step = 0
+        found_columns: dict = {}
         for svc_name, sd in services.items():
             for city in cities:
                 step += 1
@@ -195,6 +194,7 @@ def run(settings: cfg.Settings, args) -> int:
                     listings = nav.collect_listings()
                     print(f"{head} … {len(listings)}件")
                     rows = []
+                    found = found_columns.setdefault(svc_name, set())
                     for i, lst in enumerate(listings, 1):
                         ctx = {
                             "city": city,
@@ -207,7 +207,10 @@ def run(settings: cfg.Settings, args) -> int:
                         h = Harvest()
                         for html in nav.detail_pages(lst):
                             h.merge(harvest_html(html))
-                        rows.append(build_row(sd.fields, h, ctx, normalize=settings.normalize))
+                        rows.append(
+                            build_row(sd.fields, h, ctx,
+                                      normalize=settings.normalize, found=found)
+                        )
                         if i % 10 == 0 or i == len(listings):
                             print(f"      {i}/{len(listings)} 件取得", end="\r", flush=True)
                     print(" " * 40, end="\r")
@@ -227,16 +230,14 @@ def run(settings: cfg.Settings, args) -> int:
             "サービス種別": ", ".join(services),
             "失敗した検索": "\n".join(errors) or "なし",
         }
-        # 取得できなかった列（サイト構成変更の検知）
+        # 一度も見出しが見つからなかった列（サイト構成変更の検知）。
+        # 「時分～時分」のように整形後に空欄となる列は対象外。
         for name, sd in services.items():
             rows = data.get(name, [])
             if not rows:
                 continue
-            bad = [
-                fd.column
-                for fd in sd.fields
-                if sum(1 for r in rows if r.get(fd.column) in (None, "")) > len(rows) * 0.9
-            ]
+            seen = found_columns.get(name, set())
+            bad = [fd.column for fd in sd.fields if fd.column not in seen]
             if bad:
                 meta[f"要確認列（{name}）"] = ", ".join(bad)
                 print(f"\n※ {name}: ほぼ全件が空欄の列があります → {', '.join(bad)}")
