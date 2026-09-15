@@ -50,7 +50,10 @@ class MockFlowMixin:
                 self.assertEqual(len(listings), expect, f"一覧の件数({self.variant})")
                 rows = []
                 for lst in listings:
-                    h, heading = harvest_pages(nav.detail_pages(lst))
+                    pages = nav.detail_pages(lst)
+                    if lst.row_html:
+                        pages.insert(0, lst.row_html)
+                    h, heading = harvest_pages(pages)
                     ctx = {
                         "city": city, "service": service_name, "pref": "兵庫県",
                         "name": lst.name, "heading": heading or lst.name,
@@ -177,6 +180,13 @@ class TestRealFlowVariant(MockFlowMixin, unittest.TestCase):
         self.assertEqual(rows[0]["氏名"], "森田　愛1")
         self.assertEqual(rows[0]["（Ⅱ）"], "あり")
         self.assertEqual(rows[0]["事業開始年月日"], "2011/10/01")
+        # 検索結果ページから取れる項目
+        # 詳細ページに Tel／Fax があればそちらを優先し、無ければ検索結果の電話番号を使う
+        self.assertEqual(rows[0]["連絡先"], "Tel：0798-31-1001／Fax：0798-31-2001")
+        self.assertEqual(rows[0]["平日"], "9：00～17：00")
+        self.assertEqual(rows[0]["土曜"], "9：00～12：00")
+        self.assertEqual(rows[0]["日曜"], "")          # 「－」は空欄
+        self.assertEqual(rows[0]["定休日"], "土日、年末年始")
         # 住所に市区町村名が無い行でも補われること（3件目が市名なし）
         self.assertEqual(rows[2]["所在地"], "兵庫県西宮市松風町1-3")
         self.assertTrue(all(str(r["所在地"]).startswith("兵庫県西宮市") for r in rows))

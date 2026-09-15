@@ -21,6 +21,9 @@
                          - 詳細タブがリンクではなくボタン（JavaScriptで移動）
                          - タブの表示文字が当てにならない（画像タブ）
                          - 住所に市区町村名が無い行がある
+                         - 検索結果に事業所名・住所・電話・営業時間が載っている
+                         - 表示件数を 5/10/30/50 件から選べる（既定5件）
+                         - ページ送りが JavaScript
   variant "textbox"  : 市区町村を文字で入力させる構成
   variant "textonly" : 市区町村は文字入力のみで、サービス種別を選ぶ部品が無い構成
 """
@@ -323,11 +326,70 @@ class Handler(BaseHTTPRequestHandler):
             f"{svcs}<input type='submit' value='検索する'></form>"
         )
 
+    def _real_row(self, city, svc, i):
+        """実サイトの検索結果1件ぶんと同じ作り。"""
+        addr = f"〒662-00{i:02d}" , ("" if i % 3 == 0 else city) + f"松風町1-{i}"
+        return f"""
+        <li class="listItem" id="list_28-{cd_of(city, svc, i)}">
+          <div class="listHeader"><ul class="row">
+            <li class="col"><div>
+              <span class="badge badge-serviceName">{svc}</span>
+              <a class="btn btn-homepage" href="javascript:void(0)">ホームページを開く</a>
+            </div>
+            <div class="jigyosyoName"><a class="noLink" href="#map_canvas">{name_of(city, svc, i)}</a></div>
+            </li>
+            <li class="col"><dl>
+              <dt>公表日</dt><dd class="kouhyouDate">2026/09/03</dd>
+              <dt>電話番号</dt><dd class="telNumber">0798-31-{1000 + i}</dd>
+              <dt>事業所番号</dt><dd class="jigyosyoCd">{cd_of(city, svc, i)[:10]}</dd>
+            </dl></li>
+          </ul></div>
+          <div class="listBody">
+            <table class="table"><tbody>
+              <tr><th><div>所在地</div></th>
+                  <td><div><span class="postalCode">{addr[0]}</span>
+                      <a class="btn btn-map" href="javascript:void(0)">地図を開く</a></div>
+                      <div class="jigyosyoAddress">{addr[1]}</div></td></tr>
+              <tr><th><div>サービス提供地域</div></th>
+                  <td colspan="5"><div class="serviceArea">{city}・芦屋市</div></td></tr>
+            </tbody></table>
+            <dl class="row businessHoursBlock"><dt class="col">営業時間</dt><dd class="col">
+              <dl class="row businessHours">
+                <dt class="col">平日</dt><dd class="col heijituHours">9：00～17：00</dd>
+                <dt class="col">土曜日</dt><dd class="col doyoubiHours">{'9：00～12：00' if i % 2 else '－'}</dd>
+                <dt class="col">日曜日</dt><dd class="col nichiyoubiHours">－</dd>
+                <dt class="col">祝日</dt><dd class="col shukujituHours">－</dd>
+              </dl>
+              <dl class="row teikyubi"><dt class="col">定休日</dt><dd class="col">土日、年末年始</dd></dl>
+            </dd></dl>
+            <a class="btn overviewBtn" href="index.php?action_kouhyou_detail_overview_index=true&amp;JigyosyoCd={cd_of(city, svc, i)}&amp;ServiceCd=430">情報を選択して概要を見る</a>
+            <a class="btn detailBtn" href="index.php?action_kouhyou_detail_023_kani=true&amp;JigyosyoCd={cd_of(city, svc, i)}&amp;ServiceCd=430&amp;Type=search">詳細情報を見る</a>
+          </div>
+        </li>"""
+
     def result(self, q) -> bytes:
         city = q.get("city", "")
         svc = q.get("svc", "居宅介護支援")
         page = int(q.get("page", "1"))
         n = counts(city, svc)
+        if Handler.variant == "real":
+            per = int(q.get("p_count", "5"))
+            start, end = (page - 1) * per, min(page * per, n)
+            items = "".join(self._real_row(city, svc, i) for i in range(start + 1, end + 1))
+            sel = ("<select name='p_count' id='displayNumber' onchange=\""
+                   "location.href='index.php?action_kouhyou_result=true&amp;city="
+                   + urllib.parse.quote(city) + "&amp;svc=" + urllib.parse.quote(svc)
+                   + "&amp;page=1&amp;p_count='+this.value;\">"
+                   + "".join(
+                       f"<option value='{v}'{' selected' if v == per else ''}>{v}件</option>"
+                       for v in (5, 10, 30, 50))
+                   + "</select>")
+            nav = ""
+            if end < n:
+                nxt = (f"index.php?action_kouhyou_result=true&amp;city={urllib.parse.quote(city)}"
+                       f"&amp;svc={urllib.parse.quote(svc)}&amp;page={page + 1}&amp;p_count={per}")
+                nav = f"<a href='javascript:void(0);' onclick=\"location.href='{nxt}';\">次へ &gt;</a>"
+            return _page(f"<p>検索結果 {n}件</p>{sel}<ul class='listWrap'>{items}</ul>{nav}")
         start, end = (page - 1) * PER_PAGE, min(page * PER_PAGE, n)
         if Handler.variant == "real":
             # 実サイトの一覧はリンク文字が事業所名ではない
@@ -387,9 +449,13 @@ class Handler(BaseHTTPRequestHandler):
                 for n, label in enumerate(labels, start=22)
             )
         tabs = "<h1>介護事業所・生活関連情報検索</h1>" + tabs
+        if "detail_023" in self.path and Handler.variant == "real":
+            body = _detail(city, svc, i)          # 従業者・利用者・管理者・加算
+            return _page("<h1>介護事業所・生活関連情報検索</h1>"
+                         f"<div class='jigyosyoName'>{name_of(city, svc, i)}</div>" + body)
         if "detail_024" in self.path or "detail_shosai" in self.path:
             body = _detail(city, svc, i)
-        elif "detail_022" in self.path:
+        elif "detail_022" in self.path or "detail_overview" in self.path:
             body = _overview(city, svc, i)
         else:
             body = f"<h1>{name_of(city, svc, i)}</h1><p>このタブに該当データはありません</p>"

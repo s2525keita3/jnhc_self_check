@@ -256,7 +256,10 @@ def run(settings: cfg.Settings, args) -> int:
                             "jigyosyo_cd": lst.jigyosyo_cd,
                             "url": lst.url,
                         }
-                        h, heading = harvest_pages(nav.detail_pages(lst))
+                        pages = nav.detail_pages(lst)
+                        if lst.row_html:
+                            pages.insert(0, lst.row_html)
+                        h, heading = harvest_pages(pages)
                         ctx["heading"] = heading or lst.name
                         rows.append(
                             build_row(sd.fields, h, ctx,

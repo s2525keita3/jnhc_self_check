@@ -11,6 +11,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
 
@@ -57,28 +58,47 @@ def cell_text(cell) -> str:
     return re.sub(r"[ ]{2,}", " ", out).strip()
 
 
-# ページ全体の見出しとして使われがちな、事業所名ではない文字列
-_NOT_A_NAME = re.compile(
-    r"(介護サービス情報|公表システム|事業所検索|検索結果|生活関連情報|"
-    r"介護事業所|都道府県|トップ)"
+# サイト共通の見出し（事業所名ではない）
+_CHROME = re.compile(
+    r"(介護サービス情報公表システム|公表システム|生活関連情報|介護事業所検索|"
+    r"検索結果|都道府県|全国版トップ)"
 )
+# サービス種別名そのものは事業所名ではない（完全一致のときだけ除外する。
+# 「居宅介護支援事業所がじゅまる」のような正当な名称は残す）
+_SERVICE_LABELS = {
+    "居宅介護支援", "訪問看護", "訪問介護", "訪問入浴介護", "訪問リハビリテーション",
+    "通所介護", "通所リハビリテーション", "短期入所生活介護", "福祉用具貸与",
+    "介護老人福祉施設", "介護老人保健施設", "認知症対応型共同生活介護",
+    "小規模多機能型居宅介護", "定期巡回・随時対応型訪問介護看護", "予防",
+}
+
+
+def _looks_like_name(t: str) -> bool:
+    return bool(t) and 2 <= len(t) <= 60 and t not in _SERVICE_LABELS and not _CHROME.search(t)
 
 
 def main_heading(html: str) -> str:
-    """詳細ページの見出しから事業所名を取り出す。
+    """事業所名を取り出す。
 
-    一覧のリンク文字が「情報を選択して概要を見る」のような操作案内で、
-    事業所名になっていないことがあるため。
+    一覧のリンク文字が「情報を選択して概要を見る」のような操作案内で
+    事業所名になっていないことがあるため、次の順で探す。
+      1. 事業所名を表すことが明らかな要素（class に jigyosyoName 等）
+      2. 見出し（h1〜h3）
+      3. class に name / title を含む要素
     """
     soup = BeautifulSoup(html, "html.parser")
+    for el in soup.find_all(attrs={"class": re.compile(r"jigyosyo.?name", re.I)}):
+        t = cell_text(el)
+        if _looks_like_name(t):
+            return t
     for tag in ("h1", "h2", "h3"):
         for el in soup.find_all(tag):
             t = cell_text(el)
-            if t and not _NOT_A_NAME.search(t) and 2 <= len(t) <= 60:
+            if _looks_like_name(t):
                 return t
-    for el in soup.find_all(attrs={"class": re.compile(r"(name|title|jigyosyo)", re.I)}):
+    for el in soup.find_all(attrs={"class": re.compile(r"(name|title)", re.I)}):
         t = cell_text(el)
-        if t and not _NOT_A_NAME.search(t) and 2 <= len(t) <= 60:
+        if _looks_like_name(t):
             return t
     return ""
 
@@ -331,6 +351,63 @@ def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True,
             found.add(fd.column)
         row[fd.column] = apply_transform(raw, fd.transform, ctx, normalize)
     return row
+
+
+JIGYOSYO_CD_RE = re.compile(r"JigyosyoCd=([0-9A-Za-z\-]+)", re.I)
+DETAIL_HREF_RE = re.compile(r"action_kouhyou_detail", re.I)
+
+
+def listing_rows(html: str) -> Dict[str, str]:
+    """検索結果ページを、事業所1件ごとのHTML断片に切り分ける。
+
+    実サイトの検索結果には、事業所名・所在地・電話番号・サービス提供地域・
+    営業時間・定休日が既に載っている。詳細ページを開かなくてもこれらが
+    取れるので、1件ぶんのまとまりを切り出して抽出に回す。
+
+    クラス名やDOM構造には依存せず、「事業所番号が1件だけ含まれる最大の
+    かたまり」を1件ぶんとみなす。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out: Dict[str, str] = {}
+    for a in soup.find_all("a", href=True):
+        href = unquote(a["href"])
+        if not DETAIL_HREF_RE.search(href):
+            continue
+        m = JIGYOSYO_CD_RE.search(href)
+        if not m or m.group(1) in out:
+            continue
+        cd = m.group(1)
+        node, best = a, a
+        while node.parent is not None:
+            node = node.parent
+            chunk = str(node)
+            if len({x.group(1) for x in JIGYOSYO_CD_RE.finditer(unquote(chunk))}) > 1:
+                break
+            if len(chunk) > 200000:
+                break
+            best = node
+        out[cd] = str(best)
+    return out
+
+
+def detail_links(html: str, jigyosyo_cd: str = "") -> List[str]:
+    """HTML断片に含まれる詳細ページへのリンクを、出現順に返す。
+
+    実サイトの検索結果1件には「情報を選択して概要を見る」と
+    「詳細情報を見る」の2つのリンクがあり、従業者数や加算の情報は
+    後者の側にある。どちらも開く必要がある。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    out: List[str] = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if not DETAIL_HREF_RE.search(href):
+            continue
+        if jigyosyo_cd and jigyosyo_cd not in unquote(href):
+            continue
+        if href not in out:
+            out.append(href)
+    return out
 
 
 def harvest_pages(pages: List[str]):

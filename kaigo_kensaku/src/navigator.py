@@ -12,7 +12,7 @@ import os
 import re
 import time
 import urllib.parse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from selenium import webdriver
@@ -22,6 +22,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
+
+from src.extract import detail_links, listing_rows
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +71,8 @@ class Listing:
     name: str
     url: str
     jigyosyo_cd: str
+    row_html: str = ""      # 検索結果ページの、その事業所1件ぶんのHTML
+    extra_urls: List[str] = field(default_factory=list)   # 「詳細情報を見る」等
 
 
 class SiteError(RuntimeError):
@@ -593,11 +597,50 @@ class Navigator:
             pass
         self.dump(f"result_{city}_{service_label}")
 
+    def set_page_size(self) -> None:
+        """1ページの表示件数を最大にする（ページ送りの回数を減らす）。"""
+        def pick_max():
+            for sel in self.driver.find_elements(By.XPATH, "//select"):
+                try:
+                    if not sel.is_displayed():
+                        continue
+                    opts = sel.find_elements(By.TAG_NAME, "option")
+                    nums = [
+                        (int(re.sub(r"\D", "", o.text or "0") or 0), o)
+                        for o in opts
+                        if re.search(r"\d+\s*件", o.text or "")
+                    ]
+                    if not nums:
+                        continue
+                    n, opt = max(nums, key=lambda x: x[0])
+                    if n <= 0:
+                        continue
+                    Select(sel).select_by_visible_text(opt.text)
+                    self.driver.execute_script(
+                        "arguments[0].dispatchEvent(new Event('change', {bubbles:true}));", sel
+                    )
+                    self._sleep()
+                    log.debug("1ページの表示件数を %d件 に変更", n)
+                    return True
+                except WebDriverException:
+                    continue
+            return False
+
+        # ここではフレームを渡り歩かない。検索を行った文書に留まる必要があり、
+        # _in_frames は見つからなかったときに最上位文書へ戻してしまうため。
+        pick_max()
+
     def collect_listings(self, max_pages: int = 200) -> List[Listing]:
-        """検索結果一覧から、事業所名と詳細ページURLを集める（ページ送り対応）。"""
+        """検索結果一覧から、事業所名と詳細ページURLを集める（ページ送り対応）。
+
+        検索結果ページには事業所名・所在地・電話番号・サービス提供地域・
+        営業時間・定休日が載っているので、1件ぶんのHTMLも一緒に持ち帰る。
+        """
+        self.set_page_size()
         found: Dict[str, Listing] = {}
         prev = -1
         for page in range(max_pages):
+            rows = listing_rows(self.html)
             for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
                 try:
                     href = a.get_attribute("href") or ""
@@ -611,7 +654,16 @@ class Navigator:
                 m = JIGYOSYO_CD.search(urllib.parse.unquote(href))
                 cd = m.group(1) if m else href
                 if cd not in found:
-                    found[cd] = Listing(name=name, url=href, jigyosyo_cd=cd)
+                    row = rows.get(cd, "")
+                    extra = []
+                    for u in detail_links(row, cd):
+                        absu = urllib.parse.urljoin(self.driver.current_url, u)
+                        if absu != href and absu not in extra:
+                            extra.append(absu)
+                    found[cd] = Listing(
+                        name=name, url=href, jigyosyo_cd=cd,
+                        row_html=row, extra_urls=extra,
+                    )
             if len(found) == prev:
                 # このページで1件も増えなかった＝同じページに留まっている
                 log.debug("新規が無いためページ送りを打ち切り (%d件)", len(found))
@@ -655,7 +707,19 @@ class Navigator:
         self.get(listing.url)
         pages.append(self.html)
 
-        tab_urls = self._same_jigyosyo_links(listing)
+        # 検索結果にあった「詳細情報を見る」等のリンクを先に開く
+        visited = {listing.url}
+        for url in listing.extra_urls[:max_tabs]:
+            if url in visited:
+                continue
+            visited.add(url)
+            try:
+                self.get(url)
+                pages.append(self.html)
+            except SiteError as e:
+                log.warning("詳細ページ取得失敗: %s", e)
+
+        tab_urls = [u for u in self._same_jigyosyo_links(listing) if u not in visited]
         if not tab_urls:
             tab_urls = self._in_frames(
                 lambda: self._same_jigyosyo_links(listing) or None
@@ -668,7 +732,7 @@ class Navigator:
                 log.warning("タブ取得失敗: %s", e)
 
         if len(pages) == 1:
-            # リンクが無い作り: 表示文字をクリックして移動する
+            # タブがリンクでない作り: 表示文字をクリックして移動する
             seen_urls = {self.driver.current_url}
             for label in NAV["detail_tabs"][1:]:
                 moved = self._click_text([label], required=False)
