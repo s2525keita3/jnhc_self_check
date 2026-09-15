@@ -61,6 +61,31 @@ class Settings:
         return name if os.path.isabs(name) else os.path.join(self.base_dir, name)
 
 
+def open_text(path: str, **kw):
+    """設定ファイルを開く。
+
+    利用者が config/*.csv を Excel で開いて保存すると CP932 になる。
+    utf-8 固定で読むとツールが起動できなくなるため、順に試す。
+    """
+    last = None
+    for enc in ("utf-8-sig", "cp932", "utf-8"):
+        try:
+            f = open(path, encoding=enc, **kw)
+            f.read(1)
+            f.seek(0)
+            return f
+        except (UnicodeDecodeError, LookupError) as e:
+            last = e
+            try:
+                f.close()
+            except Exception:
+                pass
+    raise UnicodeDecodeError(
+        "config", b"", 0, 1,
+        f"{path} の文字コードを判別できません（{last}）"
+    )
+
+
 def _b(v: str) -> bool:
     return str(v).strip().lower() in ("true", "1", "yes", "on")
 
@@ -69,7 +94,7 @@ def load_settings(base_dir: str) -> Settings:
     path = os.path.join(base_dir, "settings.ini")
     cp = configparser.ConfigParser()
     # 値に ; や # を含むコメント扱いを防ぐため inline_comment_prefixes は使わない
-    with open(path, encoding="utf-8-sig") as f:
+    with open_text(path) as f:
         cp.read_file(f)
 
     def g(sec: str, key: str, default: str = "") -> str:
@@ -109,14 +134,14 @@ def parse_names(raw: str) -> List[str]:
 
 def load_prefectures(base_dir: str) -> Dict[str, str]:
     path = os.path.join(base_dir, "config", "prefectures.csv")
-    with open(path, encoding="utf-8-sig", newline="") as f:
+    with open_text(path, newline="") as f:
         return {r["pref_name"]: r["pref_code"] for r in csv.DictReader(f)}
 
 
 def load_fields(base_dir: str, fields_file: str) -> List[FieldDef]:
     path = os.path.join(base_dir, "config", fields_file)
     out: List[FieldDef] = []
-    with open(path, encoding="utf-8-sig", newline="") as f:
+    with open_text(path, newline="") as f:
         for r in csv.DictReader(f):
             if not (r.get("column") or "").strip():
                 continue
@@ -135,7 +160,7 @@ def load_fields(base_dir: str, fields_file: str) -> List[FieldDef]:
 def load_services(base_dir: str) -> Dict[str, ServiceDef]:
     path = os.path.join(base_dir, "config", "services.csv")
     out: Dict[str, ServiceDef] = {}
-    with open(path, encoding="utf-8-sig", newline="") as f:
+    with open_text(path, newline="") as f:
         for r in csv.DictReader(f):
             sd = ServiceDef(
                 service_name=r["service_name"].strip(),
@@ -158,7 +183,7 @@ def resolve_cities(base_dir: str, cities_raw: str, available: List[str]) -> List
     raw = (cities_raw or "").strip()
     if raw.startswith("@"):
         p = os.path.join(base_dir, raw[1:].strip())
-        with open(p, encoding="utf-8-sig") as f:
+        with open_text(p) as f:
             tokens = [ln.strip() for ln in f if ln.strip() and not ln.startswith("#")]
     else:
         tokens = [t.strip() for t in raw.replace("、", ",").split(",") if t.strip()]

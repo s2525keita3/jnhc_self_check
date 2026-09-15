@@ -120,10 +120,13 @@ def diagnose_detail(nav, settings: cfg.Settings, sd) -> int:
     lines.append(nav.describe_page())
     for i, html in enumerate(pages):
         h = harvest_html(html)
-        lines.append(f"\n■ ページ{i + 1} で読み取れた見出し {len(h.kv)}件")
-        lines.append("  " + " / ".join(sorted(h.kv)[:120]))
+        lines.append(f"\n■ ページ{i + 1} で読み取れた見出しと値 {len(h.kv)}件")
+        # 見出しだけでは「あり／なし」なのか件数なのか判断できない。値も出す
+        for k, v in sorted(h.kv.items())[:120]:
+            lines.append(f"    {k} = {str(v)[:60]}")
         lines.append(f"■ ページ{i + 1} の表（行×列）{len(h.matrix)}件")
-        lines.append("  " + " / ".join(f"{a}×{b}" for a, b in sorted(h.matrix)[:80]))
+        for (a, b), v in sorted(h.matrix.items())[:80]:
+            lines.append(f"    {a} × {b} = {str(v)[:60]}")
     text = "\n".join(lines)
 
     out_txt = os.path.join(settings.log_dir, "詳細ページ診断.txt")

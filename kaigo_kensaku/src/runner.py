@@ -196,6 +196,10 @@ def collect(
         "対象市区町村": ", ".join(cities),
         "サービス種別": ", ".join(services),
         "失敗した検索": "\n".join(rep.errors) or "なし",
+        # どのサイトの、いつ時点の情報かを出力自体に残す。
+        # 出力だけが独り歩きして、出典不明のまま二次利用されるのを防ぐ
+        "出典": "厚生労働省 介護サービス情報公表システム",
+        "取得元": nav.base_url.format(code=nav.pref_code),
     }
     if limit:
         rep.meta["取得方法"] = (

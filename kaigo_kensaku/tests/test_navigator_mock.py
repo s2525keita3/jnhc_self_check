@@ -230,9 +230,12 @@ class TestImageTabVariant(MockFlowMixin, unittest.TestCase):
 class TestJsRenderedVariant(MockFlowMixin, unittest.TestCase):
     """検索フォームを JavaScript で組み立てるサイトでも取得できること。
 
-    実サイトは jQuery でフォームを作るため、HTMLが届いた時点では中身が無い。
-    読み込み完了を待たずに読むと市区町村が1件も取れず、
-    「市区町村を取得できませんでした」になる（実際にこの不具合を出した）。
+    この構成のサイトは、HTMLが届いた時点ではフォームの中身が無い。読み込み
+    完了を待たずに読むと市区町村が1件も取れず、「市区町村を取得できません
+    でした」になる。
+
+    実サイトがこの作りかどうかは確認できていない（開発環境から対象サイトへ
+    到達できないため）。そうであっても壊れないことを確かめるための備え。
     """
 
     variant = "js"
@@ -241,8 +244,8 @@ class TestJsRenderedVariant(MockFlowMixin, unittest.TestCase):
         """ページ取得は、JavaScript が画面を組み立て終わるまで戻らないこと。
 
         これが守られないと、まだ空の画面を読んでしまい、市区町村が
-        1件も取れない。pageLoadStrategy を eager にして速くしようとして
-        実際にこの不具合を出した。
+        1件も取れない。pageLoadStrategy を eager にすると待たなくなるため、
+        速度目的で入れたくなったときの歯止めとしてこのテストを置いている。
         """
         from src.navigator import Navigator
 

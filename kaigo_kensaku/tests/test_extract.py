@@ -267,5 +267,41 @@ class TestFoundButUnusable(unittest.TestCase):
         self.assertNotIn("（Ⅰ）", rejected)
 
 
+class TestConfigEncoding(unittest.TestCase):
+    """設定ファイルをExcelで保存(CP932)されても読めること。
+
+    項目定義CSVは「利用者が現地で直せる」ことを狙って外出ししている。
+    ところが Excel で開いて保存すると CP932 になる。utf-8 固定で読んで
+    いると、そこでツールが起動できなくなり、外出しした意味が消える。
+    """
+
+    def test_reads_cp932_definition_file(self):
+        import shutil
+        import tempfile
+
+        from src.config import load_fields
+
+        work = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, work, True)
+        os.makedirs(os.path.join(work, "config"))
+        src = os.path.join(BASE, "config", "fields_kyotaku.csv")
+        with open(src, encoding="utf-8-sig") as f:
+            text = f.read()
+        # Excel で保存した状態を再現する
+        dst = os.path.join(work, "config", "fields_kyotaku.csv")
+        with open(dst, "w", encoding="cp932", errors="replace") as f:
+            f.write(text)
+
+        fields = load_fields(work, "fields_kyotaku.csv")
+        self.assertEqual([f.column for f in fields][:3],
+                         ["市区町村", "サービス種別", "事業所名"])
+
+    def test_reads_utf8_definition_file(self):
+        from src.config import load_fields
+
+        fields = load_fields(BASE, "fields_kyotaku.csv")
+        self.assertIn("（Ⅰ）", [f.column for f in fields])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

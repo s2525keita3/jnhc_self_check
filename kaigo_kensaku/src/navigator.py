@@ -140,9 +140,10 @@ class Navigator:
             "profile.default_content_setting_values.notifications": 2,
             "profile.default_content_setting_values.geolocation": 2,
         })
-        # pageLoadStrategy は既定（normal）のまま。実サイトは JavaScript で
-        # 画面を組み立てるため、eager にすると組み立て前の空の画面を読んで
-        # しまい、市区町村が1件も取れなくなる。速度より確実性を取る。
+        # pageLoadStrategy は既定（normal）のまま。eager にすると JavaScript の
+        # 完了を待たずに進むため、画面を組み立てる作りのサイトでは組み立て前の
+        # 空の画面を読んでしまう。実サイトがその作りかは確認できていないが、
+        # 実測で eager の速度上の利点は無かったので、確実性を取る。
         # テスト環境向けの差し替え（通常は未設定でよい）
         binary = os.environ.get("KAIGO_CHROME_BINARY")
         if binary:
