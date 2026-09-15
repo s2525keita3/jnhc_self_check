@@ -42,6 +42,7 @@ class TestGuiRun(unittest.TestCase):
         os.environ["KAIGO_BASE_URL"] = self.site.base_url
 
         import gui
+        gui.messagebox.askokcancel = lambda *a, **k: True   # 確認ダイアログは自動でOK
         self.gui = gui
         gui.BASE_DIR = self.work
         gui.CACHE_DIR = cache
@@ -88,12 +89,41 @@ class TestGuiRun(unittest.TestCase):
         self.app._select_wards()
         self.assertEqual(self.app.selected_cities(), ["神戸市中央区"])
 
-    def test_filter(self):
-        self.app._set_all(False)          # 先に全解除してから絞り込む
+    def test_filter_then_select_visible(self):
+        """絞り込んだうえで「表示中だけ選ぶ」が効くこと。
+
+        既定の「すべて選択／解除」は絞り込みに関係なく全件に効く。
+        画面外の選択が残ったまま実行される事故を防ぐため。
+        """
+        self.app._set_all(False)
+        self.app.filter_entry.delete(0, "end")
         self.app.filter_entry.insert(0, "神戸市")
         self.app._render_cities()
-        self.app._set_all(True)          # 絞り込み中は表示中のものだけ選ぶ
+        self.app._set_all(True, visible_only=True)
         self.assertEqual(self.app.selected_cities(), ["神戸市中央区"])
+
+    def test_confirm_dialog_blocks_run(self):
+        """確認でキャンセルしたら実行しないこと。"""
+        self.gui.messagebox.askokcancel = lambda *a, **k: False
+        self.app._set_all(False)
+        self.app.city_vars["芦屋市"].set(True)
+        self.app._start()
+        self.assertEqual(self.app.run_btn.cget("state"), "normal", "キャンセルしたのに走り出した")
+        self.gui.messagebox.askokcancel = lambda *a, **k: True
+
+    def test_select_all_ignores_filter(self):
+        """絞り込み中でも「すべて解除」は全件に効くこと（画面外の選択が残らない）。"""
+        self.app._set_all(True)
+        self.app.filter_entry.delete(0, "end")
+        self.app.filter_entry.insert(0, "芦屋")
+        self.app._render_cities()
+        self.app._set_all(False)
+        self.assertEqual(self.app.selected_cities(), [], "画面外の選択が残っている")
+
+    def test_warning_shown_next_to_button(self):
+        self.app._set_all(False)
+        self.app._start()
+        self.assertIn("市区町村", self.app.warn_label.cget("text"))
 
     def test_run_produces_excel(self):
         from openpyxl import load_workbook
@@ -109,6 +139,7 @@ class TestGuiRun(unittest.TestCase):
         )
         self.assertTrue(self.app.last_output, "出力ファイルが記録されていない")
         self.assertTrue(os.path.exists(self.app.last_output))
+        self.assertIn("兵庫県", os.path.basename(self.app.last_output))
         wb = load_workbook(self.app.last_output)
         self.assertIn("居宅_全件", wb.sheetnames)
         self.assertEqual(wb["居宅_全件"].max_row, 3 + 3)

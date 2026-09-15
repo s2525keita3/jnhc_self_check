@@ -136,14 +136,71 @@ class TestEndToEnd(unittest.TestCase):
             self.assertIn(f"居宅_{ward}", wb.sheetnames)
         self.assertEqual(wb["居宅_全件"].max_row, 3 + 9)   # 3区 × 3件
 
-    def test_resume_skips_completed(self):
+    def test_completed_run_is_not_reused_next_time(self):
+        """正常に完了したら進捗を捨て、次回は取り直すこと。
+
+        残したままだと「取得済み」と判断され、翌月に先月のデータが
+        その日の日付のExcelとして出てしまう（利用者が気づけない誤り）。
+        """
         self._write_settings("西宮市", "居宅介護支援")
         with MockSite("checkbox") as site:
             first = self._run(site)
             self.assertEqual(first.returncode, 0, first.stdout + first.stderr)
+            self.assertFalse(
+                os.path.exists(os.path.join(self.work, "logs", "progress.json")),
+                "正常完了したのに進捗が残っている",
+            )
             second = self._run(site)
-        self.assertIn("取得済みのためスキップ", second.stdout)
+        self.assertNotIn("取得済みのためスキップ", second.stdout)
+        self.assertIn("[1/1] 西宮市 / 居宅介護支援 … 12件", second.stdout)
         self.assertIn("完了：12件", second.stdout)
+
+    def test_resume_after_interruption(self):
+        """中断したときは、取得済みの自治体を飛ばして続きから取れること。"""
+        import json
+        import time
+
+        from src.state import DATA_VERSION
+
+        self._write_settings("西宮市, 芦屋市", "居宅介護支援")
+        os.makedirs(os.path.join(self.work, "logs"), exist_ok=True)
+        with open(os.path.join(self.work, "logs", "progress.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump({
+                "version": DATA_VERSION, "pref": "兵庫県", "saved_at": time.time(),
+                "done": ["居宅介護支援\t西宮市"],
+                "rows": {"居宅介護支援\t西宮市": [{"市区町村": "西宮市", "事業所名": "前回ぶん"}]},
+            }, f, ensure_ascii=False)
+        with MockSite("checkbox") as site:
+            r = self._run(site)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("取得済みのためスキップ", r.stdout)
+        self.assertIn("芦屋市 / 居宅介護支援 … 3件", r.stdout)
+
+    def test_other_prefecture_progress_is_discarded(self):
+        """別の都道府県の進捗が残っていても、その行を混ぜないこと。"""
+        import json
+        import time
+
+        from src.state import DATA_VERSION
+
+        self._write_settings("西宮市", "居宅介護支援")
+        os.makedirs(os.path.join(self.work, "logs"), exist_ok=True)
+        with open(os.path.join(self.work, "logs", "progress.json"), "w",
+                  encoding="utf-8") as f:
+            json.dump({
+                "version": DATA_VERSION, "pref": "大阪府", "saved_at": time.time(),
+                "done": ["居宅介護支援\t大阪市北区"],
+                "rows": {"居宅介護支援\t大阪市北区": [{"市区町村": "大阪市北区"}]},
+            }, f, ensure_ascii=False)
+        with MockSite("checkbox") as site:
+            r = self._run(site)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        from openpyxl import load_workbook
+        wb = load_workbook(os.path.join(self.work, "出力.xlsx"))
+        ws = wb["居宅_全件"]
+        cities = {ws.cell(row, 1).value for row in range(4, ws.max_row + 1)}
+        self.assertEqual(cities, {"西宮市"}, "別の県の行が混ざっている")
 
     def test_list_cities_option(self):
         self._write_settings("西宮市", "居宅介護支援")
@@ -174,9 +231,6 @@ class TestEndToEnd(unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.work, "logs", "診断結果.txt")))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
 
 class TestStaleProgress(unittest.TestCase):
     """取得ロジックを変えた後、古い進捗データを引き継がないこと。"""
@@ -202,3 +256,6 @@ class TestStaleProgress(unittest.TestCase):
         self.assertEqual(p.done, [])
         self.assertEqual(p.rows, {})
         self.assertFalse(os.path.exists(path))
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

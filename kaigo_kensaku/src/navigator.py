@@ -23,7 +23,14 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select, WebDriverWait
 
-from src.extract import detail_links, listing_rows
+from src.extract import (
+    DETAIL_HREF_RE,
+    JIGYOSYO_CD_RE,
+    detail_links,
+    listing_name,
+    listing_rows,
+    total_on_page,
+)
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +55,10 @@ NAV = {
     "detail_tabs": ["事業所の概要", "事業所の特色", "事業所の詳細", "運営状況", "その他"],
 }
 
-DETAIL_HREF = re.compile(r"action_kouhyou_detail", re.I)
+# サイト固有のURL規約は src/extract.py に一本化している。
+# 2か所に散らすと、片方だけ直したときに「一覧は取れるが行が紐づかない」という
+# 気づきにくい壊れ方をするため。
+DETAIL_HREF = DETAIL_HREF_RE
 # たどってはいけないリンク（PDF等のファイル、メール、JavaScript）
 SKIP_HREF = re.compile(
     r"(\.pdf|\.xlsx?|\.docx?|\.zip|\.csv|\.jpe?g|\.png|\.gif)(\?|$)|^mailto:|^tel:|^javascript:",
@@ -59,11 +69,23 @@ SKIP_TEXT = re.compile(
     r"(パンフレット|読み解き方|使い方|ご利用にあたって|アンケート|リンク集|サイトマップ|"
     r"個人情報|著作権|お問い合わせ|よくある|PDF|概算|試算|料金)"
 )
-JIGYOSYO_CD = re.compile(r"JigyosyoCd=([0-9A-Za-z\-]+)", re.I)
-# 一覧のリンク文字が事業所名ではなく操作案内のことがある
-GENERIC_LINK = re.compile(
-    r"(情報を選択|概要を見る|詳細を見る|詳細はこちら|この事業所|選択して|表示する|比較)"
-)
+JIGYOSYO_CD = JIGYOSYO_CD_RE
+
+
+def _page_key(url: str) -> tuple:
+    """同じページかどうかを比べるための鍵。
+
+    クエリの順序や `Type=search` の有無だけが違うURLを別ページとみなすと、
+    同じページを何度も取りに行くことになる。
+    """
+    u = urllib.parse.urlsplit(urllib.parse.unquote(url))
+    q = urllib.parse.parse_qs(u.query)
+    action = next((k for k in q if k.lower().startswith("action_")), "")
+    return (u.path, action, tuple(q.get("JigyosyoCd", [])))
+
+
+def _same_page(a: str, b: str) -> bool:
+    return _page_key(a) == _page_key(b)
 
 
 @dataclass
@@ -91,6 +113,7 @@ class Navigator:
         self.dump_dir = dump_dir
         self.driver = self._start(display)
         self._dump_no = 0
+        self.last_total_on_site: Optional[int] = None   # 直近の検索でサイトが表示した総件数
 
     # ---------------------------------------------------------------- driver
     def _start(self, display: bool):
@@ -103,6 +126,16 @@ class Navigator:
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--lang=ja-JP")
         opts.add_experimental_option("excludeSwitches", ["enable-logging"])
+        # 使うのはHTMLのテキストだけ。画像・通知・位置情報は取りに行かない。
+        # 相手サイトへのリクエスト数が大きく減り、こちらも速くなる
+        opts.add_experimental_option("prefs", {
+            "profile.managed_default_content_settings.images": 2,
+            "profile.default_content_setting_values.notifications": 2,
+            "profile.default_content_setting_values.geolocation": 2,
+        })
+        opts.add_argument("--blink-settings=imagesEnabled=false")
+        # DOMが揃った時点で戻る（画像やサブリソースの読み込み完了を待たない）
+        opts.set_capability("pageLoadStrategy", "eager")
         # テスト環境向けの差し替え（通常は未設定でよい）
         binary = os.environ.get("KAIGO_CHROME_BINARY")
         if binary:
@@ -324,7 +357,7 @@ class Navigator:
                     continue
                 el.clear()
                 el.send_keys(target)
-                self._sleep()
+                # 文字入力はブラウザ内で完結し通信しないので待たない
                 log.debug("文字入力欄に『%s』を入力（%s）", target, hint.strip()[:40])
                 return "textbox"
             except WebDriverException:
@@ -638,32 +671,27 @@ class Navigator:
         """
         self.set_page_size()
         found: Dict[str, Listing] = {}
+        self.last_total_on_site = None
         prev = -1
         for page in range(max_pages):
-            rows = listing_rows(self.html)
-            for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-                try:
-                    href = a.get_attribute("href") or ""
-                except WebDriverException:
+            html = self.html
+            if page == 0:
+                self.last_total_on_site = total_on_page(html)
+                log.debug("サイト表示の総件数: %s", self.last_total_on_site)
+            # ページのHTMLは既に手元にあるので、リンクごとにブラウザへ
+            # 問い合わせる（1本につき1往復）ことはしない
+            rows = listing_rows(html)
+            base = self.driver.current_url
+            for cd, row in rows.items():
+                if cd in found:
                     continue
-                if not DETAIL_HREF.search(href):
+                links = [urllib.parse.urljoin(base, u) for u in detail_links(row, cd)]
+                if not links:
                     continue
-                name = (a.text or "").strip()
-                if GENERIC_LINK.search(name):
-                    name = ""      # 事業所名は詳細ページの見出しから取る
-                m = JIGYOSYO_CD.search(urllib.parse.unquote(href))
-                cd = m.group(1) if m else href
-                if cd not in found:
-                    row = rows.get(cd, "")
-                    extra = []
-                    for u in detail_links(row, cd):
-                        absu = urllib.parse.urljoin(self.driver.current_url, u)
-                        if absu != href and absu not in extra:
-                            extra.append(absu)
-                    found[cd] = Listing(
-                        name=name, url=href, jigyosyo_cd=cd,
-                        row_html=row, extra_urls=extra,
-                    )
+                found[cd] = Listing(
+                    name=listing_name(row, cd), url=links[0], jigyosyo_cd=cd,
+                    row_html=row, extra_urls=links[1:],
+                )
             if len(found) == prev:
                 # このページで1件も増えなかった＝同じページに留まっている
                 log.debug("新規が無いためページ送りを打ち切り (%d件)", len(found))
@@ -674,26 +702,23 @@ class Navigator:
             log.debug("次ページへ (%d件取得済)", len(found))
         return list(found.values())
 
-    def _same_jigyosyo_links(self, listing: Listing) -> List[str]:
+    def _same_jigyosyo_links(self, listing: Listing, html: Optional[str] = None) -> List[str]:
         """同じ事業所の別ページ（タブ）へのリンクURLを集める。
 
         タブの表示文字は当てにしない。`action_kouhyou_detail_*` を含み、
         同じ事業所番号を持つURLは、ほぼ間違いなくタブである。
+
+        走査対象のHTMLは既に手元にあるので、リンク1本ごとにブラウザへ
+        問い合わせない（詳細ページはリンクが200本前後あり、事業所ごとに
+        その往復が積み上がる）。
         """
-        urls = []
-        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-            try:
-                href = a.get_attribute("href") or ""
-            except WebDriverException:
-                continue
-            if not href or not DETAIL_HREF.search(href):
-                continue
-            if href.rstrip("#") == listing.url.rstrip("#"):
-                continue
-            if listing.jigyosyo_cd and listing.jigyosyo_cd not in urllib.parse.unquote(href):
-                continue
-            urls.append(href)
-        return list(dict.fromkeys(urls))
+        base = self.driver.current_url
+        src = html if html is not None else self.html
+        urls = [
+            urllib.parse.urljoin(base, u)
+            for u in detail_links(src, listing.jigyosyo_cd)
+        ]
+        return [u for u in dict.fromkeys(urls) if _same_page(u, listing.url) is False]
 
     def detail_pages(self, listing: Listing, max_tabs: int = 8) -> List[str]:
         """詳細ページの各タブのHTMLを返す。
@@ -708,22 +733,19 @@ class Navigator:
         pages.append(self.html)
 
         # 検索結果にあった「詳細情報を見る」等のリンクを先に開く
-        visited = {listing.url}
+        visited = [listing.url]
         for url in listing.extra_urls[:max_tabs]:
-            if url in visited:
+            if any(_same_page(url, v) for v in visited):
                 continue
-            visited.add(url)
+            visited.append(url)
             try:
                 self.get(url)
                 pages.append(self.html)
             except SiteError as e:
                 log.warning("詳細ページ取得失敗: %s", e)
 
-        tab_urls = [u for u in self._same_jigyosyo_links(listing) if u not in visited]
-        if not tab_urls:
-            tab_urls = self._in_frames(
-                lambda: self._same_jigyosyo_links(listing) or None
-            ) or []
+        tab_urls = [u for u in self._same_jigyosyo_links(listing, pages[-1])
+                    if not any(_same_page(u, v) for v in visited)]
         for url in tab_urls[:max_tabs]:
             try:
                 self.get(url)

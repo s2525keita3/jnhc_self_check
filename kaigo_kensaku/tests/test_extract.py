@@ -120,9 +120,6 @@ class TestTransforms(unittest.TestCase):
         self.assertEqual(_yesno("○"), "あり")
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
 
 class TestClosedHours(unittest.TestCase):
     """実データにあった「休み」の表し方をすべて空欄にできること。"""
@@ -188,3 +185,6 @@ class TestNamePriority(unittest.TestCase):
         h.kv[norm_label("事業所の名称")] = "けあらぼ"
         row = build_row(fields, h, {"heading": "ケアラボ", "name": ""}, normalize=True)
         self.assertEqual(row["事業所名"], "ケアラボ")
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

@@ -20,34 +20,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src import config as cfg  # noqa: E402
 from src import runner  # noqa: E402
+from src.logging_setup import setup_logging  # noqa: E402
 from src.state import AlreadyRunning, Lock, Progress  # noqa: E402
 
 log = logging.getLogger("itakukaigokensaku")
-
-
-def setup_logging(base_dir: str, debug: bool) -> None:
-    log_dir = os.path.join(base_dir, "logs")
-    os.makedirs(log_dir, exist_ok=True)
-    level = logging.DEBUG if debug else logging.ERROR
-    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
-    for h in list(root.handlers):
-        root.removeHandler(h)
-
-    fh = logging.FileHandler(os.path.join(log_dir, "itakukaigokensaku.log"), encoding="utf-8")
-    fh.setLevel(level)
-    fh.setFormatter(fmt)
-    root.addHandler(fh)
-
-    sh = logging.StreamHandler(sys.stdout)
-    sh.setLevel(logging.INFO if debug else logging.WARNING)
-    sh.setFormatter(logging.Formatter("%(message)s"))
-    root.addHandler(sh)
-
-    logging.getLogger("selenium").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 
 def ask(prompt: str, default: str = "") -> str:

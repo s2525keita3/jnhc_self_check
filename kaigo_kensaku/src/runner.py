@@ -50,6 +50,31 @@ def make_navigator(settings, pref_code: str):
     )
 
 
+def row_from_listing(nav, sd, lst, base_ctx: dict, normalize: bool = True,
+                     found: Optional[set] = None):
+    """事業所1件ぶんの行を作る。
+
+    「検索結果の1件ぶん → 詳細ページ群 → 見出し索引 → 行」という順序と
+    ctx の組み立ては、本番とテストで必ず同じものを使うこと。
+    以前ここが二重化していて、本番だけ直してテストが古い手順のまま
+    通り続ける状態になっていた。
+
+    戻り値は (行, 見出し索引)。
+    """
+    pages = nav.detail_pages(lst)
+    if lst.row_html:
+        pages.insert(0, lst.row_html)
+    h, heading = harvest_pages(pages)
+    ctx = dict(base_ctx)
+    ctx.update({
+        "name": lst.name,
+        "heading": heading or lst.name,
+        "jigyosyo_cd": lst.jigyosyo_cd,
+        "url": lst.url,
+    })
+    return build_row(sd.fields, h, ctx, normalize=normalize, found=found), h
+
+
 def collect(
     nav,
     settings,
@@ -76,6 +101,8 @@ def collect(
     rep = Report()
     found_columns: Dict[str, set] = {}
     label_samples: Dict[str, list] = {}
+    fetched: Dict[str, int] = {}      # 今回実際に取得した自治体数（サービス別）
+    tally: List[tuple] = []           # (サービス, 市区町村, 取得件数, サイト表示件数)
     total = len(cities) * len(services)
     step = 0
 
@@ -94,31 +121,36 @@ def collect(
                     nav.search(city, sd.site_label,
                                exact=(settings.search_type == "exact"))
                     listings = nav.collect_listings()
-                    say(f"[{step}/{total}] {head} … {len(listings)}件")
+                    shown = nav.last_total_on_site
+                    # サイトが「◯件」と表示している数と突き合わせ、取りこぼしを検知する
+                    if shown is not None and shown != len(listings):
+                        msg = (f"{city} / {svc_name}: サイトの表示は{shown}件ですが"
+                               f"{len(listings)}件しか取得できませんでした")
+                        rep.errors.append(msg)
+                        log.error(msg)
+                        say(f"[{step}/{total}] {head} … 【要確認】{len(listings)}/{shown}件")
+                    else:
+                        say(f"[{step}/{total}] {head} … {len(listings)}件")
+                    tally.append((svc_name, city, len(listings), shown))
                     rows = []
                     found = found_columns.setdefault(svc_name, set())
                     for i, lst in enumerate(listings, 1):
                         if stop():
                             raise Cancelled
-                        ctx = {
-                            "city": city, "service": svc_name, "pref": settings.pref,
-                            "name": lst.name, "jigyosyo_cd": lst.jigyosyo_cd,
-                            "url": lst.url,
-                        }
-                        pages = nav.detail_pages(lst)
-                        if lst.row_html:
-                            pages.insert(0, lst.row_html)
-                        h, heading = harvest_pages(pages)
+                        row, h = row_from_listing(
+                            nav, sd, lst,
+                            {"city": city, "service": svc_name, "pref": settings.pref},
+                            normalize=settings.normalize, found=found,
+                        )
                         if svc_name not in label_samples:
                             label_samples[svc_name] = sorted(h.kv) + [
                                 f"{a}×{b}" for a, b in sorted(h.matrix)
                             ]
-                        ctx["heading"] = heading or lst.name
-                        rows.append(build_row(sd.fields, h, ctx,
-                                              normalize=settings.normalize, found=found))
+                        rows.append(row)
                         tick(step - 1, total, head, i, len(listings))
                     progress.put(svc_name, city, rows)
                     progress.save()
+                    fetched[svc_name] = fetched.get(svc_name, 0) + 1
                     tick(step, total, head, len(listings), len(listings))
                 except SiteError as e:
                     msg = f"{city} / {svc_name}: {e}"
@@ -129,7 +161,8 @@ def collect(
         rep.cancelled = True
         say("停止しました。取得済みのぶんを書き出します")
 
-    rep.data = {name: progress.collected(name) for name in services}
+    # 今回選んだ市区町村のぶんだけを出力する（過去の取得ぶんを混ぜない）
+    rep.data = {name: progress.collected(name, cities) for name in services}
     rep.meta = {
         "実行日時": started.strftime("%Y/%m/%d %H:%M"),
         "都道府県": settings.pref,
@@ -140,10 +173,18 @@ def collect(
     if rep.cancelled:
         rep.meta["備考"] = "途中で停止しました。再実行すると続きから取得します"
 
-    # 一度も見出しが見つからなかった列（サイト構成変更の検知）
+    if tally:
+        rep.meta["市区町村別の件数"] = "\n".join(
+            f"{svc} {city}: {got}件" + (f"（サイト表示 {shown}件）" if shown not in (None, got) else "")
+            for svc, city, got, shown in tally
+        )
+
+    # 一度も見出しが見つからなかった列（サイト構成変更の検知）。
+    # 今回1件も取得していない（全部スキップした）サービスは判定材料が無いので対象外。
+    # ここを見落とすと「全列が要確認」という誤警報が毎回出て、本当の警告が埋もれる。
     for name, sd in services.items():
         rows = rep.data.get(name, [])
-        if not rows:
+        if not rows or not fetched.get(name):
             continue
         seen = found_columns.get(name, set())
         bad = [fd.column for fd in sd.fields if fd.column not in seen]
@@ -163,6 +204,11 @@ def collect(
                 pass
         say(f"※ {name}: ほぼ全件が空欄の列があります → {', '.join(bad)}")
         say("   config/fields_*.csv の lookup 列で対応できます")
+
+    if not rep.cancelled and not rep.errors:
+        # 全部取り切ったので、再開用の進捗は役目を終えた。
+        # 残したままだと次回の実行が「取得済み」と判断して古いデータを出す。
+        progress.clear()
 
     rep.output_path = write_workbook(
         settings.output_path, services, rep.data,

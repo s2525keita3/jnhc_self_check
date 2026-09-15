@@ -408,28 +408,93 @@ def listing_rows(html: str) -> Dict[str, str]:
 
     クラス名やDOM構造には依存せず、「事業所番号が1件だけ含まれる最大の
     かたまり」を1件ぶんとみなす。
+
+    先に全リンクの祖先をたどって「その要素の下にある事業所番号」を数えておく。
+    祖先ごとにHTMLを文字列化して数える実装だと、1ページ50件で件数の二乗に
+    比例して遅くなる（実測 50件で1.3秒、100件で4.5秒）ため。
     """
     soup = BeautifulSoup(html, "html.parser")
-    out: Dict[str, str] = {}
+    anchors = []
     for a in soup.find_all("a", href=True):
         href = unquote(a["href"])
         if not DETAIL_HREF_RE.search(href):
             continue
         m = JIGYOSYO_CD_RE.search(href)
-        if not m or m.group(1) in out:
-            continue
-        cd = m.group(1)
-        node, best = a, a
-        while node.parent is not None:
+        if m:
+            anchors.append((a, m.group(1)))
+
+    # 各要素の下に何種類の事業所番号があるか（2種類見つかった時点で打ち切り）
+    codes_under: Dict[int, set] = {}
+    for a, cd in anchors:
+        node = a
+        while node is not None:
+            got = codes_under.setdefault(id(node), set())
+            if len(got) < 2:
+                got.add(cd)
             node = node.parent
-            chunk = str(node)
-            if len({x.group(1) for x in JIGYOSYO_CD_RE.finditer(unquote(chunk))}) > 1:
-                break
-            if len(chunk) > 200000:
+
+    out: Dict[str, str] = {}
+    for a, cd in anchors:
+        if cd in out:
+            continue
+        best = a
+        node = a.parent
+        while node is not None:
+            if codes_under.get(id(node), set()) != {cd}:
                 break
             best = node
+            node = node.parent
         out[cd] = str(best)
     return out
+
+
+TOTAL_COUNT_CLASS = re.compile(r"(alldatanum|totalnum|resultnum|hitnum|kensucount)", re.I)
+TOTAL_COUNT_TEXT = re.compile(r"(?:検索結果|該当|全)\s*([\d,]+)\s*件")
+
+
+def total_on_page(html: str) -> Optional[int]:
+    """検索結果ページが表示している総件数を読む。
+
+    取得件数と突き合わせて、ページ送りの取りこぼしを検知するために使う。
+    読めなければ None を返す（誤検知を出さないため、推測はしない）。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for el in soup.find_all(attrs={"class": TOTAL_COUNT_CLASS}):
+        m = re.search(r"([\d,]+)", cell_text(el))
+        if m:
+            return int(m.group(1).replace(",", ""))
+    for el in soup.find_all(["select", "option", "button"]):
+        el.extract()          # 表示件数の選択肢や「0件」ボタンを数えないように
+    m = TOTAL_COUNT_TEXT.search(soup.get_text(" ", strip=True))
+    return int(m.group(1).replace(",", "")) if m else None
+
+
+# 一覧のリンク文字が事業所名ではなく操作案内のことがある
+GENERIC_LINK_TEXT = re.compile(
+    r"(情報を選択|概要を見る|詳細を見る|詳細情報|詳細はこちら|この事業所|選択して|表示する|比較)"
+)
+
+
+def listing_name(row_html: str, jigyosyo_cd: str = "") -> str:
+    """検索結果1件ぶんのHTMLから事業所名を取り出す。
+
+    見出し（実サイトは class="jigyosyoName"）を優先し、無ければ
+    詳細ページへのリンク文字を使う。リンク文字が「詳細情報を見る」の
+    ような操作案内の場合は名前として採用しない。
+    """
+    name = main_heading(row_html)
+    if name:
+        return name
+    soup = BeautifulSoup(row_html, "html.parser")
+    for a in soup.find_all("a", href=True):
+        if not DETAIL_HREF_RE.search(unquote(a["href"])):
+            continue
+        if jigyosyo_cd and jigyosyo_cd not in unquote(a["href"]):
+            continue
+        t = cell_text(a)
+        if t and not GENERIC_LINK_TEXT.search(t):
+            return t
+    return ""
 
 
 def detail_links(html: str, jigyosyo_cd: str = "") -> List[str]:

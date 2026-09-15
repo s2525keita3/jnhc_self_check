@@ -13,18 +13,31 @@ sys.path.insert(0, os.path.join(BASE, "tests"))
 from mocksite import MockSite, cd_of, name_of  # noqa: E402
 
 from src.config import load_services  # noqa: E402
-from src.extract import build_row, harvest_pages  # noqa: E402
+from src.runner import row_from_listing  # noqa: E402
+
+
+_browser_ok = None
 
 
 def browser_available() -> bool:
-    drv = os.environ.get("KAIGO_CHROMEDRIVER")
-    if drv and not os.path.exists(drv):
-        return False
+    """実際に headless Chrome を起動できるか（1回だけ試して結果を使い回す）。
+
+    selenium が import できるかどうかだけでは判定にならない。selenium は
+    requirements で必ず入るため、Chrome が無い環境でもテストが走ってしまい、
+    引き継いだ人が「自分が壊したのか環境が無いだけなのか」を判別できなくなる。
+    """
+    global _browser_ok
+    if _browser_ok is not None:
+        return _browser_ok
     try:
-        from selenium import webdriver  # noqa: F401
-    except ImportError:
-        return False
-    return True
+        from src.navigator import Navigator
+
+        nav = Navigator("兵庫県", "28", display=False, wait=0, retry=1)
+        nav.close()
+        _browser_ok = True
+    except Exception:
+        _browser_ok = False
+    return _browser_ok
 
 
 @unittest.skipUnless(browser_available(), "Chrome/chromedriver が無いためスキップ")
@@ -50,16 +63,12 @@ class MockFlowMixin:
                 self.assertEqual(len(listings), expect, f"一覧の件数({self.variant})")
                 rows = []
                 for lst in listings:
-                    pages = nav.detail_pages(lst)
-                    if lst.row_html:
-                        pages.insert(0, lst.row_html)
-                    h, heading = harvest_pages(pages)
-                    ctx = {
-                        "city": city, "service": service_name, "pref": "兵庫県",
-                        "name": lst.name, "heading": heading or lst.name,
-                        "jigyosyo_cd": lst.jigyosyo_cd, "url": lst.url,
-                    }
-                    rows.append(build_row(sd.fields, h, ctx, normalize=True))
+                    # 本番（runner.collect）と同じ手順で1行を作る
+                    row, _ = row_from_listing(
+                        nav, sd, lst,
+                        {"city": city, "service": service_name, "pref": "兵庫県"},
+                    )
+                    rows.append(row)
                 return rows
             finally:
                 nav.close()

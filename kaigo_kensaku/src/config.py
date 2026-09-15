@@ -54,7 +54,9 @@ class Settings:
 
     @property
     def output_path(self) -> str:
-        name = self.out_file.replace("{date}", date.today().strftime("%Y%m%d"))
+        name = (self.out_file
+                .replace("{date}", date.today().strftime("%Y%m%d"))
+                .replace("{pref}", self.pref or ""))
         return name if os.path.isabs(name) else os.path.join(self.base_dir, name)
 
 
@@ -93,6 +95,14 @@ def load_settings(base_dir: str) -> Settings:
         retry=int(g("run", "retry", "3") or 3),
         resume=_b(g("run", "resume", "True")),
     )
+
+
+def parse_names(raw: str) -> List[str]:
+    """「居宅介護支援, 訪問看護」のような指定を名前のリストにする。
+
+    空白だけ／未設定なら空リスト。1件だけの指定と未設定を区別できるようにする。
+    """
+    return [t.strip() for t in (raw or "").replace("、", ",").split(",") if t.strip()]
 
 
 def load_prefectures(base_dir: str) -> Dict[str, str]:
@@ -183,12 +193,14 @@ def load_last_input(base_dir: str) -> dict:
         return {}
 
 
-def save_last_input(base_dir: str, pref: str, cities: str, search_type: str) -> None:
+def save_last_input(base_dir: str, pref: str, cities: str, search_type: str,
+                    services: str = "") -> None:
     path = os.path.join(base_dir, "input_settings.json")
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(
-                {"select_pref": pref, "input_cities": cities, "search_type": search_type},
+                {"select_pref": pref, "input_cities": cities,
+                 "search_type": search_type, "services": services},
                 f,
                 ensure_ascii=False,
             )
