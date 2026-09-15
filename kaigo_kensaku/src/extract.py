@@ -317,6 +317,10 @@ def _yesno(v: str):
         return "あり"
     if s in _NO or s.startswith("なし"):
         return "なし"
+    # 「前年同月の提供実績」のように件数で表される場合がある。
+    # 1件以上あれば算定している（あり）とみなす
+    if re.fullmatch(r"[\d,]+件?", s):
+        return "あり" if int(re.sub(r"\D", "", s) or 0) > 0 else "なし"
     if len(s) > 12:
         log.debug("あり／なしとして解釈できない値のため空欄にしました: %s", s[:40])
         return None

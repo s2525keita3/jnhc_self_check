@@ -187,7 +187,12 @@ class TestRealFlowVariant(MockFlowMixin, unittest.TestCase):
         self.assertEqual(rows[0]["非常勤"], 1)
         self.assertEqual(rows[0]["要介護２"], 19)
         self.assertEqual(rows[0]["氏名"], "森田　愛1")
+        # 加算は「加算名 × (前年同月の提供実績)」から取り、
+        # 隣の「(その内容)」のPR文を拾わないこと
+        self.assertEqual(rows[0]["（Ⅰ）"], "なし")
         self.assertEqual(rows[0]["（Ⅱ）"], "あり")
+        self.assertEqual(rows[0]["（Ⅲ）"], "なし")
+        self.assertEqual(rows[0]["（Ａ）"], "なし")
         self.assertEqual(rows[0]["事業開始年月日"], "2011/10/01")
         # 検索結果ページから取れる項目
         # 詳細ページに Tel／Fax があればそちらを優先し、無ければ検索結果の電話番号を使う

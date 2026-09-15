@@ -153,9 +153,18 @@ def collect(
                             normalize=settings.normalize, found=found, rejected=rejected,
                         )
                         if svc_name not in label_samples:
-                            label_samples[svc_name] = sorted(h.kv) + [
-                                f"{a}×{b}" for a, b in sorted(h.matrix)
-                            ]
+                            # 見出しだけでなく値も残す。値が分からないと
+                            # 「あり／なし」なのか件数なのかを判断できず、
+                            # 直すのにもう1往復かかる
+                            def _short(v, n=60):
+                                v = str(v).replace("\n", " ")
+                                return v if len(v) <= n else v[:n] + "…"
+
+                            label_samples[svc_name] = (
+                                [f"{k} = {_short(v)}" for k, v in sorted(h.kv.items())]
+                                + [f"{a} × {b} = {_short(v)}"
+                                   for (a, b), v in sorted(h.matrix.items())]
+                            )
                         rows.append(row)
                         tick(step - 1, total, head, i, len(listings))
                     if limit:
