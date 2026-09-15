@@ -232,7 +232,20 @@ def harvest_html(html: str) -> Harvest:
 # 値の整形
 # --------------------------------------------------------------------------
 
-_EMPTY_TIME = re.compile(r"^[時分～~\-\s　]*$")
+_EMPTY_TIME = re.compile(r"^[時分:：～~\-\s　]*$")
+
+
+def _is_closed_time(v: str) -> bool:
+    """営業時間が「休み」を意味するかどうか。
+
+    実サイトでは「－」のほか「0：00～0：00」「0：～0：」のように
+    すべて0で休みを表している事業所がある。
+    """
+    s = unicodedata.normalize("NFKC", v or "").strip()
+    if _EMPTY_TIME.match(s):
+        return True
+    nums = re.findall(r"\d+", s)
+    return bool(nums) and all(int(n) == 0 for n in nums)
 
 
 def _to_int(v: str):
@@ -299,7 +312,7 @@ def apply_transform(value: str, transform: str, ctx: dict, normalize: bool):
     if transform == "date":
         return _to_date(v) if normalize else v
     if transform == "time":
-        if normalize and _EMPTY_TIME.match(unicodedata.normalize("NFKC", v)):
+        if normalize and _is_closed_time(v):
             return ""
         return v
     if transform == "addr":
@@ -316,11 +329,40 @@ def apply_transform(value: str, transform: str, ctx: dict, normalize: bool):
 
 
 def lookup_value(lookup: str, h: Harvest, ctx: dict) -> Optional[str]:
-    """1つの lookup 指定（ctx: / kv: / matrix:）を解決する。"""
+    """1つの lookup 指定（ctx: / kv: / re: / matrix:）を解決する。"""
     if lookup.startswith("ctx:"):
         return ctx.get(lookup[4:].strip())
     if lookup.startswith("kv:"):
         return h.kv.get(norm_label(lookup[3:]))
+    if lookup.startswith("re:"):
+        # 見出し語のゆれを正規表現で吸収する（正規化後の見出しに対して照合）
+        try:
+            pat = re.compile(lookup[3:].strip())
+        except re.error:
+            return None
+        for k in sorted(h.kv):
+            if pat.search(k):
+                return h.kv[k]
+        for (a, b), v in sorted(h.matrix.items()):
+            if pat.search(a) or pat.search(b):
+                return v
+        return None
+    if lookup.startswith("inval:"):
+        # 「特定事業所加算 → Ⅱ」のように、値の側に区分が書かれている形
+        body = lookup[6:]
+        if "/" not in body:
+            return None
+        keypat, token = body.rsplit("/", 1)
+        try:
+            pat = re.compile(keypat)
+        except re.error:
+            return None
+        for k in sorted(h.kv):
+            if pat.search(k):
+                raw = unicodedata.normalize("NFKC", h.kv[k])
+                parts = [p for p in re.split(r"[、,，・/／\s()（）:：]+", raw) if p]
+                return "あり" if token in parts else "なし"
+        return None
     if lookup.startswith("matrix:"):
         body = lookup[7:]
         if "/" not in body:

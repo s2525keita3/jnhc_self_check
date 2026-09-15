@@ -122,3 +122,69 @@ class TestTransforms(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestClosedHours(unittest.TestCase):
+    """実データにあった「休み」の表し方をすべて空欄にできること。"""
+
+    def test_closed_patterns(self):
+        from src.extract import apply_transform
+
+        for v in ("－", "-", "時分～時分", "0：00～0：00", "0：～0：", "0:00～0:00", ""):
+            self.assertEqual(apply_transform(v, "time", {}, True), "", f"{v!r} が空欄にならない")
+
+    def test_open_hours_kept(self):
+        from src.extract import apply_transform
+
+        for v in ("9：00～17：00", "8時30分～17時30分", "0:00～24:00"):
+            self.assertEqual(apply_transform(v, "time", {}, True), v)
+
+
+class TestRegexLookup(unittest.TestCase):
+    """特定事業所加算の見出しゆれを正規表現で拾えること（取り違えないこと）。"""
+
+    def _harvest(self, labels):
+        from src.extract import Harvest, norm_label
+
+        h = Harvest()
+        for k, v in labels.items():
+            h.kv[norm_label(k)] = v
+        return h
+
+    def test_roman_numerals_are_not_confused(self):
+        from src.extract import lookup_value
+
+        h = self._harvest({
+            "特定事業所加算（Ⅰ）": "なし",
+            "特定事業所加算（Ⅱ）": "あり",
+            "特定事業所加算（Ⅲ）": "なし",
+            "特定事業所加算（Ａ）": "なし",
+        })
+        self.assertEqual(lookup_value(r"re:特定事業所加算\(?I\)?$", h, {}), "なし")
+        self.assertEqual(lookup_value(r"re:特定事業所加算\(?II\)?$", h, {}), "あり")
+        self.assertEqual(lookup_value(r"re:特定事業所加算\(?III\)?$", h, {}), "なし")
+        self.assertEqual(lookup_value(r"re:特定事業所加算\(?A\)?$", h, {}), "なし")
+
+    def test_variants(self):
+        from src.extract import lookup_value
+
+        for label in ("特定事業所加算Ⅱ", "特定事業所加算(Ⅱ)", "介護予防特定事業所加算（Ⅱ）"):
+            h = self._harvest({label: "あり"})
+            self.assertEqual(
+                lookup_value(r"re:特定事業所加算\(?II\)?$", h, {}), "あり", label
+            )
+            self.assertIsNone(lookup_value(r"re:特定事業所加算\(?I\)?$", h, {}), label)
+
+
+class TestNamePriority(unittest.TestCase):
+    """検索結果の事業所名を、詳細ページのフリガナより優先すること。"""
+
+    def test_heading_wins_over_furigana(self):
+        from src.config import load_fields
+        from src.extract import Harvest, build_row, norm_label
+
+        fields = load_fields(BASE, "fields_kyotaku.csv")
+        h = Harvest()
+        h.kv[norm_label("事業所の名称")] = "けあらぼ"
+        row = build_row(fields, h, {"heading": "ケアラボ", "name": ""}, normalize=True)
+        self.assertEqual(row["事業所名"], "ケアラボ")

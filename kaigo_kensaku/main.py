@@ -234,6 +234,7 @@ def run(settings: cfg.Settings, args) -> int:
 
         step = 0
         found_columns: dict = {}
+        label_samples: dict = {}
         for svc_name, sd in services.items():
             for city in cities:
                 step += 1
@@ -260,6 +261,10 @@ def run(settings: cfg.Settings, args) -> int:
                         if lst.row_html:
                             pages.insert(0, lst.row_html)
                         h, heading = harvest_pages(pages)
+                        if svc_name not in label_samples:
+                            label_samples[svc_name] = sorted(h.kv) + [
+                                f"{a}×{b}" for a, b in sorted(h.matrix)
+                            ]
                         ctx["heading"] = heading or lst.name
                         rows.append(
                             build_row(sd.fields, h, ctx,
@@ -294,6 +299,18 @@ def run(settings: cfg.Settings, args) -> int:
             bad = [fd.column for fd in sd.fields if fd.column not in seen]
             if bad:
                 meta[f"要確認列（{name}）"] = ", ".join(bad)
+                labels = label_samples.get(name, [])
+                if labels:
+                    # サイト上で実際に見つかった見出し語。config/fields_*.csv の
+                    # lookup を直すときはこれを見る
+                    meta[f"見つかった見出し（{name}）"] = " / ".join(labels)[:30000]
+                    try:
+                        with open(os.path.join(settings.log_dir, "見つかった見出し.txt"),
+                                  "w", encoding="utf-8") as f:
+                            f.write(f"【{name}】取得できなかった列: {', '.join(bad)}\n\n")
+                            f.write("\n".join(labels))
+                    except OSError:
+                        pass
                 print(f"\n※ {name}: ほぼ全件が空欄の列があります → {', '.join(bad)}")
                 print("   サイトの見出し語が変わった可能性があります。"
                       "config/fields_*.csv の lookup 列で対応できます。")
