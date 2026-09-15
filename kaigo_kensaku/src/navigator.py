@@ -58,6 +58,10 @@ SKIP_TEXT = re.compile(
     r"個人情報|著作権|お問い合わせ|よくある|PDF|概算|試算|料金)"
 )
 JIGYOSYO_CD = re.compile(r"JigyosyoCd=([0-9A-Za-z\-]+)", re.I)
+# 一覧のリンク文字が事業所名ではなく操作案内のことがある
+GENERIC_LINK = re.compile(
+    r"(情報を選択|概要を見る|詳細を見る|詳細はこちら|この事業所|選択して|表示する|比較)"
+)
 
 
 @dataclass
@@ -602,8 +606,8 @@ class Navigator:
                 if not DETAIL_HREF.search(href):
                     continue
                 name = (a.text or "").strip()
-                if not name:
-                    continue
+                if GENERIC_LINK.search(name):
+                    name = ""      # 事業所名は詳細ページの見出しから取る
                 m = JIGYOSYO_CD.search(urllib.parse.unquote(href))
                 cd = m.group(1) if m else href
                 if cd not in found:
@@ -619,20 +623,44 @@ class Navigator:
         return list(found.values())
 
     def detail_pages(self, listing: Listing) -> List[str]:
-        """詳細ページの各タブのHTMLを返す。"""
+        """詳細ページの各タブのHTMLを返す。
+
+        タブはリンクとは限らない（ボタンやJavaScriptのこともある）ため、
+        表示文字をクリックして移動する。タブ列はどのタブでも表示され続けるので、
+        1タブずつ順にクリックしていけば全部まわれる。
+        """
         pages = []
         self.get(listing.url)
         pages.append(self.html)
-        tab_urls = []
-        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-            t = (a.text or "").strip()
-            href = a.get_attribute("href") or ""
-            if t in NAV["detail_tabs"] and DETAIL_HREF.search(href) and href != listing.url:
-                tab_urls.append(href)
-        for url in dict.fromkeys(tab_urls):
-            try:
-                self.get(url)
+
+        for label in NAV["detail_tabs"]:
+            if label == NAV["detail_tabs"][0]:
+                continue                      # 最初のタブは今開いている画面
+            moved = self._click_text([label], required=False)
+            if not moved:
+                moved = bool(self._in_frames(
+                    lambda lb=label: self._click_text([lb], required=False)
+                ))
+            if moved:
                 pages.append(self.html)
-            except SiteError as e:
-                log.warning("タブ取得失敗: %s", e)
+            else:
+                log.debug("タブ『%s』が見つかりません", label)
+
+        if len(pages) == 1:
+            # クリックで移動できない作りのとき: リンクのURLを直接開く
+            tab_urls = []
+            for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
+                try:
+                    t = (a.text or "").strip()
+                    href = a.get_attribute("href") or ""
+                except WebDriverException:
+                    continue
+                if t in NAV["detail_tabs"] and DETAIL_HREF.search(href) and href != listing.url:
+                    tab_urls.append(href)
+            for url in dict.fromkeys(tab_urls):
+                try:
+                    self.get(url)
+                    pages.append(self.html)
+                except SiteError as e:
+                    log.warning("タブ取得失敗: %s", e)
         return pages

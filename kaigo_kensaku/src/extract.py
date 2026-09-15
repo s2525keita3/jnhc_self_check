@@ -57,6 +57,32 @@ def cell_text(cell) -> str:
     return re.sub(r"[ ]{2,}", " ", out).strip()
 
 
+# ページ全体の見出しとして使われがちな、事業所名ではない文字列
+_NOT_A_NAME = re.compile(
+    r"(介護サービス情報|公表システム|事業所検索|検索結果|生活関連情報|"
+    r"介護事業所|都道府県|トップ)"
+)
+
+
+def main_heading(html: str) -> str:
+    """詳細ページの見出しから事業所名を取り出す。
+
+    一覧のリンク文字が「情報を選択して概要を見る」のような操作案内で、
+    事業所名になっていないことがあるため。
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for tag in ("h1", "h2", "h3"):
+        for el in soup.find_all(tag):
+            t = cell_text(el)
+            if t and not _NOT_A_NAME.search(t) and 2 <= len(t) <= 60:
+                return t
+    for el in soup.find_all(attrs={"class": re.compile(r"(name|title|jigyosyo)", re.I)}):
+        t = cell_text(el)
+        if t and not _NOT_A_NAME.search(t) and 2 <= len(t) <= 60:
+            return t
+    return ""
+
+
 @dataclass
 class Harvest:
     """1事業所ぶんの全タブから集めた見出し→値の索引。"""
@@ -213,11 +239,24 @@ def _to_date(v: str) -> str:
     return s
 
 
-def _clean_addr(v: str, pref: str = "") -> str:
+def _clean_addr(v: str, pref: str = "", city: str = "") -> str:
+    """〒を除き、都道府県名・市区町村名が欠けていれば補う。
+
+    公表システムの住所は市区町村名が省かれていることがある
+    （例: 「〒662-0916　津門稲荷町5-13」）。
+    """
     s = re.sub(r"〒\s*\d{3}-?\d{4}", "", v or "")
     s = s.replace("　", " ")
     s = re.sub(r"\s+", "", s).strip()
-    if pref and s and not s.startswith(pref):
+    if not s:
+        return s
+    if city and city not in s:
+        tail = re.search(r"([^市]+区)$", city)     # 神戸市中央区 → 中央区
+        if tail and s.startswith(tail.group(1)):
+            s = city[: -len(tail.group(1))] + s   # 「中央区…」→「神戸市中央区…」
+        else:
+            s = city + s
+    if pref and not s.startswith(pref):
         s = pref + s
     return s
 
@@ -244,7 +283,9 @@ def apply_transform(value: str, transform: str, ctx: dict, normalize: bool):
             return ""
         return v
     if transform == "addr":
-        return _clean_addr(v, ctx.get("pref", "") if normalize else "")
+        if not normalize:
+            return v
+        return _clean_addr(v, ctx.get("pref", ""), ctx.get("city", ""))
     if transform == "yesno":
         return _yesno(v) if normalize else v
     if transform == "space":
@@ -290,6 +331,20 @@ def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True,
             found.add(fd.column)
         row[fd.column] = apply_transform(raw, fd.transform, ctx, normalize)
     return row
+
+
+def harvest_pages(pages: List[str]):
+    """詳細ページ（全タブ）から索引と事業所名の見出しをまとめて作る。
+
+    main.py とテストで同じ処理を使うための入口。
+    """
+    h = Harvest()
+    heading = ""
+    for n, html in enumerate(pages):
+        h.merge(harvest_html(html))
+        if n == 0:
+            heading = main_heading(html)
+    return h, heading
 
 
 def missing_columns(row: dict, fields) -> List[str]:

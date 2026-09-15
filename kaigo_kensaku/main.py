@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src import config as cfg  # noqa: E402
 from src.excelout import write_workbook  # noqa: E402
-from src.extract import build_row, harvest_html, Harvest  # noqa: E402
+from src.extract import build_row, harvest_pages  # noqa: E402
 from src.state import AlreadyRunning, Lock, Progress  # noqa: E402
 
 log = logging.getLogger("itakukaigokensaku")
@@ -153,6 +153,8 @@ def run(settings: cfg.Settings, args) -> int:
     progress = Progress(os.path.join(settings.log_dir, "progress.json"))
     if settings.resume and not args.restart:
         progress.load()
+        if progress.stale:
+            print("※ ツールが更新されているため、前回の取得データは使わず最初から取得します")
     elif args.restart:
         progress.clear()
 
@@ -205,9 +207,8 @@ def run(settings: cfg.Settings, args) -> int:
                             "jigyosyo_cd": lst.jigyosyo_cd,
                             "url": lst.url,
                         }
-                        h = Harvest()
-                        for html in nav.detail_pages(lst):
-                            h.merge(harvest_html(html))
+                        h, heading = harvest_pages(nav.detail_pages(lst))
+                        ctx["heading"] = heading or lst.name
                         rows.append(
                             build_row(sd.fields, h, ctx,
                                       normalize=settings.normalize, found=found)

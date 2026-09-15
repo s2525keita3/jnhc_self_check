@@ -163,3 +163,29 @@ class TestEndToEnd(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestStaleProgress(unittest.TestCase):
+    """取得ロジックを変えた後、古い進捗データを引き継がないこと。"""
+
+    def test_old_progress_is_discarded(self):
+        import json
+
+        work = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, work, True)
+        os.makedirs(os.path.join(work, "logs"))
+        path = os.path.join(work, "logs", "progress.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"done": ["居宅介護支援\t西宮市"],
+                 "rows": {"居宅介護支援\t西宮市": [{"事業所名": "情報を選択して概要を見る"}]}},
+                f, ensure_ascii=False,
+            )
+        sys.path.insert(0, BASE)
+        from src.state import Progress
+
+        p = Progress(path).load()
+        self.assertTrue(p.stale)
+        self.assertEqual(p.done, [])
+        self.assertEqual(p.rows, {})
+        self.assertFalse(os.path.exists(path))

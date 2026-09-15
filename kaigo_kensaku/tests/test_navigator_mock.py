@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(BASE, "tests"))
 from mocksite import MockSite, cd_of, name_of  # noqa: E402
 
 from src.config import load_services  # noqa: E402
-from src.extract import Harvest, build_row, harvest_html  # noqa: E402
+from src.extract import build_row, harvest_pages  # noqa: E402
 
 
 def browser_available() -> bool:
@@ -50,12 +50,11 @@ class MockFlowMixin:
                 self.assertEqual(len(listings), expect, f"一覧の件数({self.variant})")
                 rows = []
                 for lst in listings:
-                    h = Harvest()
-                    for html in nav.detail_pages(lst):
-                        h.merge(harvest_html(html))
+                    h, heading = harvest_pages(nav.detail_pages(lst))
                     ctx = {
                         "city": city, "service": service_name, "pref": "兵庫県",
-                        "name": lst.name, "jigyosyo_cd": lst.jigyosyo_cd, "url": lst.url,
+                        "name": lst.name, "heading": heading or lst.name,
+                        "jigyosyo_cd": lst.jigyosyo_cd, "url": lst.url,
                     }
                     rows.append(build_row(sd.fields, h, ctx, normalize=True))
                 return rows
@@ -167,9 +166,20 @@ class TestRealFlowVariant(MockFlowMixin, unittest.TestCase):
     def test_kyotaku(self):
         rows = self.run_flow("西宮市", "居宅介護支援", 12)
         self.assertEqual(rows[0]["市区町村"], "西宮市")
-        self.assertEqual(rows[0]["常勤"], 2)
-        self.assertEqual(rows[0]["（Ⅱ）"], "あり")
         self.assertEqual(self.site.pdf_hits, 0, "PDFを開いてしまっている")
+        # 一覧のリンク文字ではなく、詳細ページの見出しから事業所名を取ること
+        self.assertEqual(rows[0]["事業所名"], name_of("西宮市", "居宅介護支援", 1))
+        self.assertFalse(any("情報を選択" in str(r["事業所名"]) for r in rows))
+        # ボタン式のタブをクリックして、概要以外の情報も取れていること
+        self.assertEqual(rows[0]["常勤"], 2)
+        self.assertEqual(rows[0]["非常勤"], 1)
+        self.assertEqual(rows[0]["要介護２"], 19)
+        self.assertEqual(rows[0]["氏名"], "森田　愛1")
+        self.assertEqual(rows[0]["（Ⅱ）"], "あり")
+        self.assertEqual(rows[0]["事業開始年月日"], "2011/10/01")
+        # 住所に市区町村名が無い行でも補われること（3件目が市名なし）
+        self.assertEqual(rows[2]["所在地"], "兵庫県西宮市松風町1-3")
+        self.assertTrue(all(str(r["所在地"]).startswith("兵庫県西宮市") for r in rows))
 
     def test_houkan(self):
         rows = self.run_flow("芦屋市", "訪問看護", 3)

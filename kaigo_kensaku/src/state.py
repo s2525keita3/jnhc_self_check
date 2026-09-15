@@ -7,6 +7,10 @@ from typing import Dict, List
 
 LOCK_NAME = ".__itakukaigokensaku.lock"
 
+# 取得ロジックを変更したら上げる。これが違う進捗ファイルは読み捨てる
+# （古い取り方で集めたデータが再開時に混ざらないようにするため）
+DATA_VERSION = 2
+
 
 class AlreadyRunning(RuntimeError):
     pass
@@ -45,6 +49,7 @@ class Progress:
         self.path = path
         self.done: List[str] = []
         self.rows: Dict[str, List[dict]] = {}
+        self.stale = False
 
     @staticmethod
     def key(service: str, city: str) -> str:
@@ -54,17 +59,25 @@ class Progress:
         try:
             with open(self.path, encoding="utf-8") as f:
                 d = json.load(f)
-            self.done = d.get("done", [])
-            self.rows = d.get("rows", {})
         except (OSError, ValueError):
-            pass
+            return self
+        if d.get("version") != DATA_VERSION:
+            # ツールの取得ロジックが変わっている。古いデータは使わない
+            self.stale = True
+            self.clear()
+            return self
+        self.done = d.get("done", [])
+        self.rows = d.get("rows", {})
         return self
 
     def save(self) -> None:
         os.makedirs(os.path.dirname(self.path) or ".", exist_ok=True)
         tmp = self.path + ".tmp"
         with open(tmp, "w", encoding="utf-8") as f:
-            json.dump({"done": self.done, "rows": self.rows}, f, ensure_ascii=False)
+            json.dump(
+                {"version": DATA_VERSION, "done": self.done, "rows": self.rows},
+                f, ensure_ascii=False,
+            )
         os.replace(tmp, self.path)
 
     def is_done(self, service: str, city: str) -> bool:

@@ -15,6 +15,10 @@
                        トップ →「介護事業所を検索する」→「詳しい条件で探す」
                        → サービスの選択 →（次へ進む）→ 事業所の所在地選択 → 検索。
                        サービスを選ぶまで所在地の選択肢は出ない。
+                       さらに実データで確認できた癖を再現する:
+                         - 一覧のリンク文字が「情報を選択して概要を見る」
+                         - 詳細タブがリンクではなくボタン（JavaScriptで移動）
+                         - 住所に市区町村名が無い行がある
   variant "textbox"  : 市区町村を文字で入力させる構成
   variant "textonly" : 市区町村は文字入力のみで、サービス種別を選ぶ部品が無い構成
 """
@@ -54,7 +58,7 @@ def _overview(city: str, svc: str, i: int) -> str:
     <h1>{name_of(city, svc, i)}</h1>
     <table>
       <tr><th>介護サービスの種類</th><td>{svc}</td></tr>
-      <tr><th>所在地</th><td>〒662-00{i:02d}　{city}松風町1-{i}
+      <tr><th>所在地</th><td>〒662-00{i:02d}　{'' if i % 3 == 0 else city}松風町1-{i}
           <a href="https://maps.example.invalid/">地図を開く</a></td></tr>
       <tr><th>連絡先</th><td>Tel：0798-31-{1000+i}／Fax：0798-31-{2000+i}
           <a href="https://example.invalid/">ホームページを開く</a></td></tr>
@@ -323,11 +327,19 @@ class Handler(BaseHTTPRequestHandler):
         page = int(q.get("page", "1"))
         n = counts(city, svc)
         start, end = (page - 1) * PER_PAGE, min(page * PER_PAGE, n)
-        items = "".join(
-            f"<li><a href='index.php?action_kouhyou_detail_022_kani=true&JigyosyoCd="
-            f"{cd_of(city, svc, i)}'>{name_of(city, svc, i)}</a></li>"
-            for i in range(start + 1, end + 1)
-        )
+        if Handler.variant == "real":
+            # 実サイトの一覧はリンク文字が事業所名ではない
+            items = "".join(
+                f"<li><a href='index.php?action_kouhyou_detail_022_kani=true&JigyosyoCd="
+                f"{cd_of(city, svc, i)}'>情報を選択して概要を見る</a></li>"
+                for i in range(start + 1, end + 1)
+            )
+        else:
+            items = "".join(
+                f"<li><a href='index.php?action_kouhyou_detail_022_kani=true&JigyosyoCd="
+                f"{cd_of(city, svc, i)}'>{name_of(city, svc, i)}</a></li>"
+                for i in range(start + 1, end + 1)
+            )
         nav = ""
         if Handler.variant == "deadnext":
             return _page(
@@ -351,14 +363,21 @@ class Handler(BaseHTTPRequestHandler):
             city, svc = CITIES[ci], SERVICES[si]
         except (ValueError, IndexError):
             return _page("<p>該当なし</p>")
-        tabs = ""
-        for n, label in enumerate(
-            ["事業所の概要", "事業所の特色", "事業所の詳細", "運営状況", "その他"], start=22
-        ):
-            tabs += (
+        labels = ["事業所の概要", "事業所の特色", "事業所の詳細", "運営状況", "その他"]
+        if Handler.variant == "real":
+            # 実サイトのタブはリンクではなくボタン（クリックしないと移動できない）
+            tabs = "".join(
+                f"<button type='button' onclick=\"location.href='index.php?"
+                f"action_kouhyou_detail_0{n}_kani=true&JigyosyoCd={cd}'\">{label}</button> "
+                for n, label in enumerate(labels, start=22)
+            )
+        else:
+            tabs = "".join(
                 f"<a href='index.php?action_kouhyou_detail_0{n}_kani=true"
                 f"&JigyosyoCd={cd}'>{label}</a> "
+                for n, label in enumerate(labels, start=22)
             )
+        tabs = "<h1>介護事業所・生活関連情報検索</h1>" + tabs
         if "detail_024" in self.path:
             body = _detail(city, svc, i)
         elif "detail_022" in self.path:

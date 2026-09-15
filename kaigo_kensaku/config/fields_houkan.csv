@@ -1,7 +1,7 @@
 column,lookup,transform,group1,group2
 市区町村,ctx:city,text,,
 サービス種別,ctx:service,text,,
-事業所名,ctx:name|kv:事業所の名称|kv:名称,trim,,
+事業所名,kv:事業所の名称|kv:名称|ctx:heading|ctx:name,trim,,
 所在地,kv:所在地|kv:事業所の所在地,addr,,
 連絡先,kv:連絡先|kv:電話番号,trim,,
 事業開始年月日,kv:事業開始年月日|kv:事業開始年月日（指定年月日）|kv:指定年月日,date,,
