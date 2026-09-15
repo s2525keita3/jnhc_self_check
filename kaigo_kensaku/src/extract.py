@@ -47,8 +47,23 @@ def norm_label(s: str) -> str:
     return s
 
 
+# 番号だけのalt（アイコンの通し番号など）は文字として扱わない
+_ALT_IGNORE = re.compile(r"^\d+$")
+
+
 def cell_text(cell) -> str:
-    """セルの表示文字列。ボタン等のノイズを除去する。"""
+    """セルの表示文字列。ボタン等のノイズを除去する。
+
+    実サイトは「あり／なし」を画像で表示している箇所がある。
+      <td><img alt="あり" src="ico_jigyosho_ari.gif"></td>
+    文字を拾うだけでは空になるため、画像の alt も文字として読む。
+    """
+    for img in cell.find_all("img"):
+        alt = (img.get("alt") or "").strip()
+        if alt and not _ALT_IGNORE.match(alt) and not any(n in alt for n in NOISE):
+            img.replace_with(alt)
+        else:
+            img.replace_with("")
     txt = cell.get_text("\n", strip=True)
     lines = []
     for ln in txt.split("\n"):

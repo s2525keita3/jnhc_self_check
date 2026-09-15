@@ -71,5 +71,42 @@ class TestRealResultList(unittest.TestCase):
             self.assertIn(col, filled, f"{col} が検索結果ページから取れていない")
 
 
+class TestRealKasanTable(unittest.TestCase):
+    """実サイトの「介護報酬の加算状況」から、あり／なしを読めること。
+
+    あり／なしは文字ではなく画像で表示されている。
+      <td><img alt="あり" src="ico_jigyosho_ari.gif"></td>
+    文字だけを拾うと空になり、見出しのゆれを吸収する探索が隣の
+    「(その内容)」欄のPR文を拾ってしまう（実際にこの不具合を出した）。
+    """
+
+    def setUp(self):
+        from src.extract import harvest_html
+
+        p = os.path.join(BASE, "tests", "fixtures", "real_kasan_table.html")
+        with open(p, encoding="utf-8") as f:
+            self.h = harvest_html(f.read())
+
+    def test_reads_yes_no_from_image_alt(self):
+        from src.extract import norm_label
+
+        got = {n: self.h.kv.get(norm_label(f"特定事業所加算（{n}）"))
+               for n in ("Ⅰ", "Ⅱ", "Ⅲ", "Ａ")}
+        self.assertEqual(got, {"Ⅰ": "あり", "Ⅱ": "なし", "Ⅲ": "なし", "Ａ": "なし"})
+
+    def test_row_uses_the_right_values(self):
+        from src.config import load_services
+        from src.extract import build_row
+
+        fields = load_services(BASE)["居宅介護支援"].fields
+        row = build_row(fields, self.h,
+                        {"city": "西宮市", "pref": "兵庫県", "heading": "ケアラボ"},
+                        normalize=True)
+        self.assertEqual(row["（Ⅰ）"], "あり")
+        self.assertEqual(row["（Ⅱ）"], "なし")
+        self.assertEqual(row["（Ⅲ）"], "なし")
+        self.assertEqual(row["（Ａ）"], "なし")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

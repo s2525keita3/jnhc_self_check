@@ -98,13 +98,17 @@ def _detail(city: str, svc: str, i: int) -> str:
         kasan = """
         <table>
           <tr><th>介護報酬の加算状況</th><th>(前年同月の提供実績)</th><th>(その内容)</th></tr>
-          <tr><th>特定事業所加算（Ⅰ）</th><td>なし</td>
+          <tr><th>特定事業所加算（Ⅰ）</th>
+              <td><img alt="なし" src="/img/pref/ico_jigyosho_nashi.gif"></td>
               <td>当事業所は利用者様に寄り添い、24時間連絡体制を確保しています。</td></tr>
-          <tr><th>特定事業所加算（Ⅱ）</th><td>あり</td>
+          <tr><th>特定事業所加算（Ⅱ）</th>
+              <td><img alt="あり" src="/img/pref/ico_jigyosho_ari.gif"></td>
               <td>当事業所は利用者様に寄り添い、24時間連絡体制を確保しています。</td></tr>
-          <tr><th>特定事業所加算（Ⅲ）</th><td>なし</td>
+          <tr><th>特定事業所加算（Ⅲ）</th>
+              <td><img alt="なし" src="/img/pref/ico_jigyosho_nashi.gif"></td>
               <td>当事業所は利用者様に寄り添い、24時間連絡体制を確保しています。</td></tr>
-          <tr><th>特定事業所加算（Ａ）</th><td>なし</td>
+          <tr><th>特定事業所加算（Ａ）</th>
+              <td><img alt="なし" src="/img/pref/ico_jigyosho_nashi.gif"></td>
               <td>当事業所は利用者様に寄り添い、24時間連絡体制を確保しています。</td></tr>
           <tr><th>入院時情報連携加算(I)</th><td>3</td>
               <td>入院時に情報提供を行っています。</td></tr>
@@ -122,11 +126,16 @@ def _detail(city: str, svc: str, i: int) -> str:
         </table>""" % (i % 6 + 2)
         kasan = """
         <table>
-          <tr><th>緊急時訪問看護加算</th><td>あり</td></tr>
-          <tr><th>特別管理加算</th><td>あり</td></tr>
-          <tr><th>ターミナルケア加算</th><td>あり</td></tr>
-          <tr><th>サービス提供体制強化加算</th><td>なし</td></tr>
-          <tr><th>２４時間対応体制</th><td>あり</td></tr>
+          <tr><th>緊急時訪問看護加算</th>
+              <td><img alt="あり" src="/img/pref/ico_jigyosho_ari.gif"></td></tr>
+          <tr><th>特別管理加算</th>
+              <td><img alt="あり" src="/img/pref/ico_jigyosho_ari.gif"></td></tr>
+          <tr><th>ターミナルケア加算</th>
+              <td><img alt="あり" src="/img/pref/ico_jigyosho_ari.gif"></td></tr>
+          <tr><th>サービス提供体制強化加算</th>
+              <td><img alt="なし" src="/img/pref/ico_jigyosho_nashi.gif"></td></tr>
+          <tr><th>２４時間対応体制</th>
+              <td><img alt="あり" src="/img/pref/ico_jigyosho_ari.gif"></td></tr>
         </table>"""
     users = """
     <table>
