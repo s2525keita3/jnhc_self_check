@@ -209,6 +209,18 @@ class TestYesNoRejectsProse(unittest.TestCase):
                         ("有", "あり"), ("無", "なし"), ("", "")]:
             self.assertEqual(apply_transform(v, "yesno", {}, True), want, v)
 
+    def test_numbers_are_not_treated_as_yes_no(self):
+        """数値をあり／なしに読み替えないこと。
+
+        実サイトの「前年同月の提供実績」欄に入っていたのは「10人」という
+        利用者数だった。これを「1件以上＝あり」と読み替えると、
+        4区分すべてが「あり」になる誤りが出る。
+        """
+        from src.extract import apply_transform
+
+        for v in ("10人", "10件", "3", "0", "1", "1,204"):
+            self.assertEqual(apply_transform(v, "yesno", {}, True), "", v)
+
     def test_regex_lookup_does_not_grab_long_value(self):
         from src.extract import Harvest, lookup_value, norm_label
 
