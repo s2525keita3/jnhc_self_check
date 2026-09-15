@@ -12,7 +12,6 @@ import logging
 import os
 import sys
 import traceback
-from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(getattr(sys, "_MEIPASS", __file__)))
 if getattr(sys, "frozen", False):  # PyInstaller で .exe 化した場合
@@ -20,8 +19,7 @@ if getattr(sys, "frozen", False):  # PyInstaller で .exe 化した場合
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from src import config as cfg  # noqa: E402
-from src.excelout import write_workbook  # noqa: E402
-from src.extract import build_row, harvest_pages  # noqa: E402
+from src import runner  # noqa: E402
 from src.state import AlreadyRunning, Lock, Progress  # noqa: E402
 
 log = logging.getLogger("itakukaigokensaku")
@@ -164,8 +162,6 @@ def diagnose_detail(nav, settings: cfg.Settings, sd) -> int:
 
 
 def run(settings: cfg.Settings, args) -> int:
-    from src.navigator import Navigator, SiteError  # Selenium は実行時に読み込む
-
     prefs = cfg.load_prefectures(settings.base_dir)
     all_services = cfg.load_services(settings.base_dir)
 
@@ -187,15 +183,7 @@ def run(settings: cfg.Settings, args) -> int:
 
     if args.diagnose or args.diagnose_detail:
         settings.dump_html = True
-    dump_dir = os.path.join(settings.log_dir, "html") if settings.dump_html else None
-    nav = Navigator(
-        pref=settings.pref,
-        pref_code=prefs[settings.pref],
-        display=settings.display,
-        wait=settings.wait,
-        retry=settings.retry,
-        dump_dir=dump_dir,
-    )
+    nav = runner.make_navigator(settings, prefs[settings.pref])
 
     progress = Progress(os.path.join(settings.log_dir, "progress.json"))
     if settings.resume and not args.restart:
@@ -205,8 +193,6 @@ def run(settings: cfg.Settings, args) -> int:
     elif args.restart:
         progress.clear()
 
-    started = datetime.now()
-    errors: list[str] = []
     try:
         if args.diagnose:
             return diagnose(nav, settings, list(services.values()))
@@ -232,102 +218,18 @@ def run(settings: cfg.Settings, args) -> int:
         total = len(cities) * len(services)
         print(f"対象: {len(cities)}自治体 × {len(services)}サービス = {total}件の検索\n")
 
-        step = 0
-        found_columns: dict = {}
-        label_samples: dict = {}
-        for svc_name, sd in services.items():
-            for city in cities:
-                step += 1
-                head = f"[{step}/{total}] {city} / {svc_name}"
-                if progress.is_done(svc_name, city):
-                    print(f"{head} … 取得済みのためスキップ")
-                    continue
-                try:
-                    nav.search(city, sd.site_label, exact=(settings.search_type == "exact"))
-                    listings = nav.collect_listings()
-                    print(f"{head} … {len(listings)}件")
-                    rows = []
-                    found = found_columns.setdefault(svc_name, set())
-                    for i, lst in enumerate(listings, 1):
-                        ctx = {
-                            "city": city,
-                            "service": svc_name,
-                            "pref": settings.pref,
-                            "name": lst.name,
-                            "jigyosyo_cd": lst.jigyosyo_cd,
-                            "url": lst.url,
-                        }
-                        pages = nav.detail_pages(lst)
-                        if lst.row_html:
-                            pages.insert(0, lst.row_html)
-                        h, heading = harvest_pages(pages)
-                        if svc_name not in label_samples:
-                            label_samples[svc_name] = sorted(h.kv) + [
-                                f"{a}×{b}" for a, b in sorted(h.matrix)
-                            ]
-                        ctx["heading"] = heading or lst.name
-                        rows.append(
-                            build_row(sd.fields, h, ctx,
-                                      normalize=settings.normalize, found=found)
-                        )
-                        if i % 10 == 0 or i == len(listings):
-                            print(f"      {i}/{len(listings)} 件取得", end="\r", flush=True)
-                    print(" " * 40, end="\r")
-                    progress.put(svc_name, city, rows)
-                    progress.save()
-                except SiteError as e:
-                    msg = f"{city} / {svc_name}: {e}"
-                    errors.append(msg)
-                    log.error(msg)
-                    print(f"{head} … 失敗（{e}）")
+        def on_tick(done, all_, head, i, n):
+            if n:
+                print(f"      {i}/{n} 件取得", end="\r", flush=True)
 
-        data = {name: progress.collected(name) for name in services}
-        meta = {
-            "実行日時": started.strftime("%Y/%m/%d %H:%M"),
-            "都道府県": settings.pref,
-            "対象市区町村": ", ".join(cities),
-            "サービス種別": ", ".join(services),
-            "失敗した検索": "\n".join(errors) or "なし",
-        }
-        # 一度も見出しが見つからなかった列（サイト構成変更の検知）。
-        # 「時分～時分」のように整形後に空欄となる列は対象外。
-        for name, sd in services.items():
-            rows = data.get(name, [])
-            if not rows:
-                continue
-            seen = found_columns.get(name, set())
-            bad = [fd.column for fd in sd.fields if fd.column not in seen]
-            if bad:
-                meta[f"要確認列（{name}）"] = ", ".join(bad)
-                labels = label_samples.get(name, [])
-                if labels:
-                    # サイト上で実際に見つかった見出し語。config/fields_*.csv の
-                    # lookup を直すときはこれを見る
-                    meta[f"見つかった見出し（{name}）"] = " / ".join(labels)[:30000]
-                    try:
-                        with open(os.path.join(settings.log_dir, "見つかった見出し.txt"),
-                                  "w", encoding="utf-8") as f:
-                            f.write(f"【{name}】取得できなかった列: {', '.join(bad)}\n\n")
-                            f.write("\n".join(labels))
-                    except OSError:
-                        pass
-                print(f"\n※ {name}: ほぼ全件が空欄の列があります → {', '.join(bad)}")
-                print("   サイトの見出し語が変わった可能性があります。"
-                      "config/fields_*.csv の lookup 列で対応できます。")
-
-        out = write_workbook(
-            settings.output_path,
-            services,
-            data,
-            summary_sheet=settings.summary_sheet,
-            per_city_sheet=settings.per_city_sheet,
-            decorate=settings.decorate,
-            meta=meta,
+        rep = runner.collect(
+            nav, settings, services, cities, progress,
+            on_log=print, on_progress=on_tick,
         )
-        total_rows = sum(len(v) for v in data.values())
-        print(f"\n完了：{total_rows}件を出力しました\n  {out}")
-        if errors:
-            print(f"\n失敗した検索が {len(errors)} 件あります（logs/itakukaigokensaku.log を確認してください）")
+        print(f"\n完了：{rep.total_rows}件を出力しました\n  {rep.output_path}")
+        if rep.errors:
+            print(f"\n失敗した検索が {len(rep.errors)} 件あります"
+                  "（logs/itakukaigokensaku.log を確認してください）")
             print("  再実行すると、失敗した分だけ取得し直します")
         cfg.save_last_input(settings.base_dir, settings.pref, settings.cities_raw, settings.search_type)
         return 0

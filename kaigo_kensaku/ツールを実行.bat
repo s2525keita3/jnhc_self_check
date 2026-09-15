@@ -6,11 +6,9 @@ set PY=
 python --version >nul 2>&1
 if not errorlevel 1 set PY=python
 if defined PY goto READY
-
 py --version >nul 2>&1
 if not errorlevel 1 set PY=py
 if defined PY goto READY
-
 goto NOPYTHON
 
 :READY
@@ -21,9 +19,10 @@ echo.
 echo 必要な部品を確認しています。初回は数分かかります…
 %PY% -m pip install -q -r requirements.txt
 if errorlevel 1 goto PIPFAIL
-echo 確認できました。
+echo 確認できました。画面を開きます。
 echo.
-%PY% main.py
+echo （この黒い画面は閉じないでください。ツールの画面が別に開きます）
+%PY% gui.py
 goto END
 
 :PIPFAIL
@@ -31,7 +30,6 @@ echo.
 echo ------------------------------------------------------------
 echo 必要な部品のインストールに失敗しました。
 echo インターネットに接続されているか確認してください。
-echo 社内ネットワークの場合は、管理者に確認が必要な場合があります。
 echo ------------------------------------------------------------
 echo.
 pause
@@ -57,5 +55,3 @@ start https://www.python.org/downloads/
 exit /b 1
 
 :END
-echo.
-pause

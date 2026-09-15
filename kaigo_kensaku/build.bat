@@ -1,11 +1,11 @@
 @echo off
-rem ---- .exe ã‚’ä½œã‚‹ï¼ˆåˆå›ã®ã¿: pip install pyinstallerï¼‰----
+rem ---- .exe ‚ğì‚éi‰‰ñ‚Ì‚İ: pip install pyinstallerj----
 chcp 65001 > nul
-pyinstaller --noconfirm --onefile --console ^
+pyinstaller --noconfirm --onefile --windowed ^
   --name itakukaigokensaku ^
   --add-data "config;config" ^
-  main.py
+  gui.py
 echo.
-echo dist\itakukaigokensaku.exe ãŒå‡ºæ¥ã¾ã—ãŸã€‚
-echo settings.ini ã¨ config ãƒ•ã‚©ãƒ«ãƒ€ã‚’åŒã˜å ´æ‰€ã«ç½®ã„ã¦å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚
+echo dist\itakukaigokensaku.exe ‚ªo—ˆ‚Ü‚µ‚½B
+echo settings.ini ‚Æ config ƒtƒHƒ‹ƒ_‚ğ“¯‚¶êŠ‚É’u‚¢‚ÄÀs‚µ‚Ä‚­‚¾‚³‚¢B
 pause

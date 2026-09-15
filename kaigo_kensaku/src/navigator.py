@@ -200,7 +200,7 @@ class Navigator:
                 return True
         # label が無い作りの場合は value 属性で探す
         for el in self.driver.find_elements(
-            By.XPATH, f"//input[(@type='checkbox' or @type='radio') and @value]"
+            By.XPATH, "//input[(@type='checkbox' or @type='radio') and @value]"
         ):
             if text in (el.get_attribute("value") or ""):
                 if not el.is_selected():
