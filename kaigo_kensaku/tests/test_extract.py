@@ -186,5 +186,40 @@ class TestNamePriority(unittest.TestCase):
         row = build_row(fields, h, {"heading": "ケアラボ", "name": ""}, normalize=True)
         self.assertEqual(row["事業所名"], "ケアラボ")
 
+class TestYesNoRejectsProse(unittest.TestCase):
+    """あり／なしの列に、事業所のPR文のような長文を入れないこと。
+
+    見出しの探索を緩くしている都合で無関係な文章を拾うことがある。
+    それを「あり／なし」の列にそのまま出すと、空欄よりも悪い誤りになる
+    （実際に特定事業所加算の4列にPR文が入る不具合が起きた）。
+    """
+
+    def test_prose_becomes_blank(self):
+        from src.extract import apply_transform
+
+        prose = ("利用者様の在宅生活継続のため、個別性を大切にし地域に根差した"
+                 "事業所として２４時間連絡体制を整えています。")
+        self.assertEqual(apply_transform(prose, "yesno", {}, True), "")
+
+    def test_known_wordings(self):
+        from src.extract import apply_transform
+
+        for v, want in [("あり", "あり"), ("なし", "なし"), ("○", "あり"), ("×", "なし"),
+                        ("算定している", "あり"), ("算定していない", "なし"),
+                        ("有", "あり"), ("無", "なし"), ("", "")]:
+            self.assertEqual(apply_transform(v, "yesno", {}, True), want, v)
+
+    def test_regex_lookup_does_not_grab_long_value(self):
+        from src.extract import Harvest, lookup_value, norm_label
+
+        h = Harvest()
+        h.matrix[(norm_label("特定事業所加算（Ⅱ）"), norm_label("取組内容"))] = (
+            "当事業所は利用者様の在宅生活を支えるため、24時間の連絡体制を確保しています。")
+        self.assertIsNone(lookup_value(r"re:特定事業所加算\(?II\)?$", h, {}),
+                          "長文を加算の値として拾っている")
+        h.matrix[(norm_label("特定事業所加算（Ⅱ）"), norm_label("算定状況"))] = "あり"
+        self.assertEqual(lookup_value(r"re:特定事業所加算\(?II\)?$", h, {}), "あり")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

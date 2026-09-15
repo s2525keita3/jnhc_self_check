@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -14,6 +15,8 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
+
+log = logging.getLogger(__name__)
 
 # 表セル内に混ざるボタン・リンクの文言（値として取り込まない）
 NOISE = (
@@ -294,15 +297,30 @@ def _clean_addr(v: str, pref: str = "", city: str = "") -> str:
     return s
 
 
-def _yesno(v: str) -> str:
+# あり／なしを表す言い回し。これ以外の値は「解釈できなかった」として扱う。
+_YES = ("あり", "有", "有り", "○", "◯", "●", "算定している", "対応している", "実施している", "1")
+_NO = ("なし", "無", "無し", "×", "✕", "－", "-", "算定していない", "対応していない",
+       "実施していない", "非該当", "該当なし", "0")
+
+
+def _yesno(v: str):
+    """あり／なしの列の値を正規化する。
+
+    解釈できない値（事業所のPR文など）は None を返し、列を空欄にする。
+    見出しの探索を緩くしている都合上、無関係な文章を拾うことがあるが、
+    それを「あり／なし」の列にそのまま出すと、空欄よりも悪い誤りになる。
+    """
     s = norm_label(v or "")
     if not s:
         return ""
-    if s.startswith("あり") or s in ("有", "有り", "○", "◯"):
+    if s in _YES or s.startswith("あり"):
         return "あり"
-    if s.startswith("なし") or s in ("無", "無し", "×", "－", "-"):
+    if s in _NO or s.startswith("なし"):
         return "なし"
-    return v.strip()
+    if len(s) > 12:
+        log.debug("あり／なしとして解釈できない値のため空欄にしました: %s", s[:40])
+        return None
+    return None
 
 
 def apply_transform(value: str, transform: str, ctx: dict, normalize: bool):
@@ -320,7 +338,10 @@ def apply_transform(value: str, transform: str, ctx: dict, normalize: bool):
             return v
         return _clean_addr(v, ctx.get("pref", ""), ctx.get("city", ""))
     if transform == "yesno":
-        return _yesno(v) if normalize else v
+        if not normalize:
+            return v
+        got = _yesno(v)
+        return "" if got is None else got
     if transform == "space":
         return re.sub(r"[ \t]{2,}", " ", v).strip()
     if transform == "trim":
@@ -343,8 +364,10 @@ def lookup_value(lookup: str, h: Harvest, ctx: dict) -> Optional[str]:
         for k in sorted(h.kv):
             if pat.search(k):
                 return h.kv[k]
+        # 行列からも拾うが、見出しが一致しただけで隣の長文を持ってこないよう、
+        # 値が短いもの（あり／なし等）に限る
         for (a, b), v in sorted(h.matrix.items()):
-            if pat.search(a) or pat.search(b):
+            if (pat.search(a) or pat.search(b)) and len(v) <= 12:
                 return v
         return None
     if lookup.startswith("inval:"):

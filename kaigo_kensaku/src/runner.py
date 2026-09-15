@@ -173,6 +173,18 @@ def collect(
     if rep.cancelled:
         rep.meta["備考"] = "途中で停止しました。再実行すると続きから取得します"
 
+    # サイト上で見つかった見出しは、問題が無くても毎回残しておく。
+    # 「値が取れているように見えて実は別の項目を拾っている」場合、
+    # 要確認列には出ないため、後から突き合わせる材料が必要になる。
+    for name, labels in label_samples.items():
+        try:
+            os.makedirs(settings.log_dir, exist_ok=True)
+            with open(os.path.join(settings.log_dir, f"見つかった見出し_{name}.txt"),
+                      "w", encoding="utf-8") as f:
+                f.write("\n".join(labels))
+        except OSError:
+            pass
+
     if tally:
         rep.meta["市区町村別の件数"] = "\n".join(
             f"{svc} {city}: {got}件" + (f"（サイト表示 {shown}件）" if shown not in (None, got) else "")
