@@ -52,7 +52,7 @@ def make_navigator(settings, pref_code: str):
 
 
 def row_from_listing(nav, sd, lst, base_ctx: dict, normalize: bool = True,
-                     found: Optional[set] = None):
+                     found: Optional[set] = None, rejected: Optional[set] = None):
     """事業所1件ぶんの行を作る。
 
     「検索結果の1件ぶん → 詳細ページ群 → 見出し索引 → 行」という順序と
@@ -73,7 +73,8 @@ def row_from_listing(nav, sd, lst, base_ctx: dict, normalize: bool = True,
         "jigyosyo_cd": lst.jigyosyo_cd,
         "url": lst.url,
     })
-    return build_row(sd.fields, h, ctx, normalize=normalize, found=found), h
+    return build_row(sd.fields, h, ctx, normalize=normalize,
+                     found=found, rejected=rejected), h
 
 
 def collect(
@@ -104,6 +105,7 @@ def collect(
     rep.trial = bool(limit)
     trial_rows: Dict[str, List[dict]] = {}
     found_columns: Dict[str, set] = {}
+    rejected_columns: Dict[str, set] = {}
     label_samples: Dict[str, list] = {}
     fetched: Dict[str, int] = {}      # 今回実際に取得した自治体数（サービス別）
     tally: List[tuple] = []           # (サービス, 市区町村, 取得件数, サイト表示件数)
@@ -141,13 +143,14 @@ def collect(
                     tally.append((svc_name, city, len(listings), shown))
                     rows = []
                     found = found_columns.setdefault(svc_name, set())
+                    rejected = rejected_columns.setdefault(svc_name, set())
                     for i, lst in enumerate(listings, 1):
                         if stop():
                             raise Cancelled
                         row, h = row_from_listing(
                             nav, sd, lst,
                             {"city": city, "service": svc_name, "pref": settings.pref},
-                            normalize=settings.normalize, found=found,
+                            normalize=settings.normalize, found=found, rejected=rejected,
                         )
                         if svc_name not in label_samples:
                             label_samples[svc_name] = sorted(h.kv) + [
@@ -218,7 +221,15 @@ def collect(
         if not rows or not fetched.get(name):
             continue
         seen = found_columns.get(name, set())
-        bad = [fd.column for fd in sd.fields if fd.column not in seen]
+        bad_value = rejected_columns.get(name, set())
+        # 見出しが見つからなかった列に加えて、「見つかったが値として使えず、
+        # 結局どの行も空欄のままだった」列も要確認とする
+        bad = [
+            fd.column for fd in sd.fields
+            if fd.column not in seen
+            or (fd.column in bad_value
+                and all(r.get(fd.column) in (None, "") for r in rows))
+        ]
         if not bad:
             continue
         rep.meta[f"要確認列（{name}）"] = ", ".join(bad)

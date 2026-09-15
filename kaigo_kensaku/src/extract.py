@@ -397,12 +397,17 @@ def lookup_value(lookup: str, h: Harvest, ctx: dict) -> Optional[str]:
 
 
 def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True,
-              found: Optional[set] = None) -> dict:
+              found: Optional[set] = None, rejected: Optional[set] = None) -> dict:
     """項目定義に従って1行ぶんの辞書を作る。
 
     found を渡すと、ページ上で見出しが見つかった列名を追加する。
     「整形した結果たまたま空欄」（営業時間の『時分～時分』など）と
     「そもそも見出しが無い」（サイト構成の変更）を区別するために使う。
+
+    rejected を渡すと、「見出しは見つかったが、値として使えなかった」列名を
+    追加する。あり／なしの列に事業所のPR文が入っていた事例のように、
+    見つかってはいるが別の項目を拾っている場合を検知するために必要。
+    found だけだと、この状態が「取得できている」と誤って扱われる。
     """
     row = {}
     for fd in fields:
@@ -414,7 +419,11 @@ def build_row(fields, h: Harvest, ctx: dict, normalize: bool = True,
                 break
         if raw != "" and found is not None:
             found.add(fd.column)
-        row[fd.column] = apply_transform(raw, fd.transform, ctx, normalize)
+        value = apply_transform(raw, fd.transform, ctx, normalize)
+        if (raw != "" and value in (None, "") and fd.transform == "yesno"
+                and rejected is not None):
+            rejected.add(fd.column)
+        row[fd.column] = value
     return row
 
 

@@ -221,5 +221,39 @@ class TestYesNoRejectsProse(unittest.TestCase):
         self.assertEqual(lookup_value(r"re:特定事業所加算\(?II\)?$", h, {}), "あり")
 
 
+class TestFoundButUnusable(unittest.TestCase):
+    """「見出しは見つかったが値として使えない」列を検知できること。
+
+    特定事業所加算の列に事業所のPR文が入っていたとき、found だけを見て
+    いたため「取得できている」と扱われ、要確認列として報告されなかった。
+    結果、原因を突き止める手掛かり（見つかった見出しの一覧）も
+    出力されなかった。
+    """
+
+    def _row(self, value):
+        from src.config import load_fields
+        from src.extract import Harvest, build_row, norm_label
+
+        fields = load_fields(BASE, "fields_kyotaku.csv")
+        h = Harvest()
+        h.kv[norm_label("特定事業所加算（Ⅰ）")] = value
+        found, rejected = set(), set()
+        row = build_row(fields, h, {"city": "西宮市", "pref": "兵庫県", "heading": "A"},
+                        True, found, rejected)
+        return row, found, rejected
+
+    def test_prose_is_reported_as_unusable(self):
+        row, found, rejected = self._row(
+            "当事業所は24時間連絡体制を確保し、利用者様に寄り添います。")
+        self.assertEqual(row["（Ⅰ）"], "")
+        self.assertIn("（Ⅰ）", found, "見出し自体は見つかっている")
+        self.assertIn("（Ⅰ）", rejected, "値として使えなかったことが記録されていない")
+
+    def test_valid_value_is_not_reported(self):
+        row, found, rejected = self._row("あり")
+        self.assertEqual(row["（Ⅰ）"], "あり")
+        self.assertNotIn("（Ⅰ）", rejected)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
