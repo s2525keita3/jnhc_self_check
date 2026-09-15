@@ -9,6 +9,12 @@
   variant "select"   : プルダウンで市区町村とサービスを選び検索ボタン
   variant "deep"     : トップに「検索」リンクが無く、2階層たどらないと市区町村に届かない
   variant "deadnext" : 「次へ」が常に出るが同じページに戻る（無限ループ対策の確認用）
+  variant "iframe"   : 検索フォームが iframe の中にある構成
+  variant "pdftrap"  : トップにPDF等の紛らわしいリンクが並ぶ構成（誤追尾の確認用）
+  variant "real"     : 実サイトの導線を再現した構成。
+                       トップ →「介護事業所を検索する」→「詳しい条件で探す」
+                       → サービスの選択 →（次へ進む）→ 事業所の所在地選択 → 検索。
+                       サービスを選ぶまで所在地の選択肢は出ない。
   variant "textbox"  : 市区町村を文字で入力させる構成
   variant "textonly" : 市区町村は文字入力のみで、サービス種別を選ぶ部品が無い構成
 """
@@ -112,6 +118,7 @@ def _detail(city: str, svc: str, i: int) -> str:
 
 class Handler(BaseHTTPRequestHandler):
     variant = "checkbox"
+    pdf_hits = 0
 
     def log_message(self, *a):  # テスト出力を汚さない
         pass
@@ -125,6 +132,15 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
+        if u.path.endswith(".pdf"):
+            Handler.pdf_hits += 1
+            body = b"%PDF-1.4 dummy"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         q = {k: v[0] for k, v in urllib.parse.parse_qs(u.query).items()}
         if "action_kouhyou_detail" in u.query:
             return self._send(self.detail(q))
@@ -132,6 +148,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(self.result(q))
         if "action_kouhyou_search_svc" in u.query:
             return self._send(self.search_svc(q))
+        if "action_kouhyou_menu" in u.query:
+            return self._send(self.menu())
+        if "action_kouhyou_svc" in u.query:
+            return self._send(self.real_svc())
+        if "action_kouhyou_area" in u.query:
+            return self._send(self.real_area(q))
         if "action_kouhyou_guide" in u.query:
             return self._send(self.guide())
         if "action_kouhyou_search" in u.query:
@@ -140,6 +162,29 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------- 画面
     def top(self) -> bytes:
+        if Handler.variant == "pdftrap":
+            # 実サイトにあった「パンフレットPDF」のような紛らわしいリンク
+            return _page(
+                "<h1>兵庫県 介護サービス情報公表システム</h1>"
+                "<a href='/upload/prefinfo/00/介護サービス情報公表システムパンフレット"
+                "（H26.10月版）.pdf'>介護サービス情報公表システムパンフレット</a>"
+                "<a href='index.php?action_kouhyou_other=true'>公表情報の読み解き方</a>"
+                "<a href='index.php?action_kouhyou_other=true'>介護サービス概算料金の試算</a>"
+                "<a href='index.php?action_kouhyou_guide=true'>サービス・エリアからさがす</a>"
+            )
+        if Handler.variant == "iframe":
+            return _page(
+                "<h1>兵庫県 介護サービス情報公表システム</h1>"
+                "<iframe name='main' src='index.php?action_kouhyou_search=true'"
+                " width='900' height='600'></iframe>"
+            )
+        if Handler.variant == "real":
+            return _page(
+                "<h1>兵庫県 介護サービス情報公表システム</h1>"
+                "<a href='/upload/prefinfo/00/パンフレット.pdf'>パンフレット</a>"
+                "<a href='index.php?action_kouhyou_other=true'>公表情報の読み解き方</a>"
+                "<a href='index.php?action_kouhyou_menu=true'>介護事業所を検索する</a>"
+            )
         if Handler.variant == "deep":
             # トップに検索リンクが無く、案内ページ経由でしか到達できない構成
             return _page(
@@ -160,8 +205,47 @@ class Handler(BaseHTTPRequestHandler):
             "<a href='index.php?action_kouhyou_search=true'>地域から事業所をさがす</a>"
         )
 
+    def menu(self) -> bytes:
+        return _page(
+            "<h2>検索方法を選んでください</h2>"
+            "<a href='index.php?action_kouhyou_kantan=true'>かんたん検索</a>"
+            "<a href='index.php?action_kouhyou_svc=true'>詳しい条件で探す</a>"
+        )
+
+    def real_svc(self) -> bytes:
+        """サービスの選択。ここに市区町村は無い（実サイトと同じ）。"""
+        svcs = "".join(
+            f"<label for='s{i}'><input type='checkbox' id='s{i}' name='svc' "
+            f"value='{s}'>{s}</label> "
+            for i, s in enumerate(SERVICES)
+        )
+        return _page(
+            "<h2>サービスの選択</h2>"
+            "<form action='index.php' method='get'>"
+            "<input type='hidden' name='action_kouhyou_area' value='true'>"
+            f"{svcs}<input type='submit' value='次へ進む'></form>"
+        )
+
+    def real_area(self, q) -> bytes:
+        """事業所の所在地選択。サービスを選んだ後にだけ現れる。"""
+        svc = q.get("svc", "居宅介護支援")
+        cities = "".join(
+            f"<label for='c{i}'><input type='checkbox' id='c{i}' name='city' "
+            f"value='{c}'>{c}</label> "
+            for i, c in enumerate(CITIES)
+        )
+        return _page(
+            f"<h2>事業所の所在地選択（{svc}）</h2>"
+            "<form action='index.php' method='get'>"
+            "<input type='hidden' name='action_kouhyou_result' value='true'>"
+            f"<input type='hidden' name='svc' value='{svc}'>"
+            f"{cities}<input type='submit' value='検索する'></form>"
+        )
+
     def search(self) -> bytes:
         v = Handler.variant
+        if v in ("iframe", "pdftrap"):
+            v = "checkbox"
         if v == "link":
             links = "".join(
                 f"<a href='index.php?action_kouhyou_search_svc=true&city="
@@ -287,9 +371,14 @@ class Handler(BaseHTTPRequestHandler):
 class MockSite:
     def __init__(self, variant: str = "checkbox"):
         Handler.variant = variant
+        Handler.pdf_hits = 0
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
         self.port = self.httpd.server_address[1]
         self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+
+    @property
+    def pdf_hits(self) -> int:
+        return Handler.pdf_hits
 
     @property
     def base_url(self) -> str:

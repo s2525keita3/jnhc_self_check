@@ -163,7 +163,8 @@ def run(settings: cfg.Settings, args) -> int:
             return diagnose(nav, settings, list(services.values()))
 
         print(f"\n{settings.pref} の市区町村一覧を取得しています…")
-        available = nav.list_cities()
+        first_service = next(iter(services.values()))
+        available = nav.list_cities(first_service.site_label)
         if args.list_cities:
             print("\n".join(available))
             return 0

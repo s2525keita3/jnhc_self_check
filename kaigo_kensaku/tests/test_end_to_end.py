@@ -99,6 +99,31 @@ class TestEndToEnd(unittest.TestCase):
         texts = [str(c.value) for r in summary.iter_rows() for c in r]
         self.assertNotIn("要確認列（居宅介護支援）", texts)
 
+    def test_real_flow_two_services(self):
+        """実サイトの導線（サービス→所在地）でも最後まで通ること。"""
+        from openpyxl import load_workbook
+
+        self._write_settings("西宮市, 芦屋市", "居宅介護支援, 訪問看護")
+        with MockSite("real") as site:
+            r = self._run(site)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        wb = load_workbook(os.path.join(self.work, "出力.xlsx"))
+        self.assertEqual(wb["居宅_全件"].max_row, 3 + 12 + 3)
+        self.assertEqual(wb["訪看_全件"].max_row, 3 + 3 + 3)
+        self.assertIn("訪看_芦屋市", wb.sheetnames)
+
+    def test_real_flow_wildcard_wards(self):
+        """実サイトの導線で、神戸市* の展開（市区町村一覧の取得）が効くこと。"""
+        from openpyxl import load_workbook
+
+        self._write_settings("神戸市*", "居宅介護支援")
+        with MockSite("real") as site:
+            r = self._run(site)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        wb = load_workbook(os.path.join(self.work, "出力.xlsx"))
+        for ward in ("神戸市東灘区", "神戸市灘区", "神戸市中央区"):
+            self.assertIn(f"居宅_{ward}", wb.sheetnames)
+
     def test_wildcard_expands_wards(self):
         from openpyxl import load_workbook
 

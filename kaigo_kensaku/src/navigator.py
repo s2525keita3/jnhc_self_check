@@ -28,14 +28,35 @@ log = logging.getLogger(__name__)
 BASE_URL = "https://www.kaigokensaku.mhlw.go.jp/{code}/"
 
 # 画面遷移に使うリンク・ボタンの候補文言（上から順に試す）
+# 実サイトの導線:
+#   都道府県トップ →「介護事業所を検索する」→「詳しい条件で探す」
+#   → サービスの選択 → 事業所の所在地選択 → 検索
 NAV = {
-    "to_search": ["介護事業所検索", "事業所を検索する", "事業所検索", "サービスから探す", "地域から探す"],
+    "to_search": [
+        "介護事業所を検索する", "介護事業所検索", "事業所を検索する", "事業所検索",
+        "サービスから探す", "地域から探す",
+    ],
+    "to_detail_search": [
+        "詳しい条件で探す", "詳細条件で探す", "詳しい条件", "条件を指定して探す",
+        "条件を選んで探す",
+    ],
+    "next_step": ["次へ進む", "次に進む", "この条件で次へ", "選択して次へ", "進む", "次へ"],
     "search_button": ["検索する", "検索", "この条件で検索", "上記の条件で検索"],
     "next_page": ["次へ", "次の10件", "次のページ", "次へ >", ">"],
     "detail_tabs": ["事業所の概要", "事業所の特色", "事業所の詳細", "運営状況", "その他"],
 }
 
 DETAIL_HREF = re.compile(r"action_kouhyou_detail", re.I)
+# たどってはいけないリンク（PDF等のファイル、メール、JavaScript）
+SKIP_HREF = re.compile(
+    r"(\.pdf|\.xlsx?|\.docx?|\.zip|\.csv|\.jpe?g|\.png|\.gif)(\?|$)|^mailto:|^tel:|^javascript:",
+    re.I,
+)
+# 検索画面ではないと分かる文言
+SKIP_TEXT = re.compile(
+    r"(パンフレット|読み解き方|使い方|ご利用にあたって|アンケート|リンク集|サイトマップ|"
+    r"個人情報|著作権|お問い合わせ|よくある|PDF|概算|試算|料金)"
+)
 JIGYOSYO_CD = re.compile(r"JigyosyoCd=([0-9A-Za-z\-]+)", re.I)
 
 
@@ -191,8 +212,42 @@ class Navigator:
         t = self._clean(text)
         return t == target if exact else (target in t)
 
+    def _in_frames(self, fn):
+        """現在の文書で fn を試し、駄目ならフレームの中も順に試す。
+
+        フレーム内で見つかった場合は、そのフレームに入ったままにする
+        （続けて行うサービス選択や検索ボタン押下も同じフレームで行うため）。
+        """
+        r = fn()
+        if r:
+            return r
+        n = len(self.driver.find_elements(By.XPATH, "//iframe|//frame"))
+        for i in range(n):
+            try:
+                self.driver.switch_to.default_content()
+                frames = self.driver.find_elements(By.XPATH, "//iframe|//frame")
+                if i >= len(frames):
+                    break
+                self.driver.switch_to.frame(frames[i])
+                r = fn()
+                if r:
+                    log.debug("フレーム %d 内で見つかりました", i)
+                    return r
+            except WebDriverException:
+                continue
+        try:
+            self.driver.switch_to.default_content()
+        except WebDriverException:
+            pass
+        return None
+
     def _pick(self, target: str, exact: bool = False,
               allow_text: bool = False) -> Optional[str]:
+        """画面（フレーム内を含む）から『target』を選ぶ。"""
+        return self._in_frames(lambda: self._pick_here(target, exact, allow_text))
+
+    def _pick_here(self, target: str, exact: bool = False,
+                   allow_text: bool = False) -> Optional[str]:
         """画面上の『target』を選ぶ。
 
         チェックボックス → プルダウン →（allow_text なら）文字入力欄 → リンク
@@ -269,8 +324,11 @@ class Navigator:
         return None
 
     def _candidate_links(self) -> List[str]:
-        """市区町村の選択画面へ続きそうなリンクのURLを集める。"""
-        origin = self.base_url.format(code=self.pref_code).rsplit("/", 2)[0]
+        """市区町村の選択画面へ続きそうなリンクのURLを集める。
+
+        PDF等のファイルや、都道府県ページの外に出るリンクはたどらない。
+        """
+        root = self.base_url.format(code=self.pref_code)
         out = []
         for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
             try:
@@ -278,33 +336,24 @@ class Navigator:
                 href = a.get_attribute("href") or ""
             except WebDriverException:
                 continue
-            if not t or not href.startswith(origin):
-                continue
+            if not t or not href.startswith(root):
+                continue          # 都道府県ページ配下から出ない
+            if SKIP_HREF.search(href) or SKIP_TEXT.search(t):
+                continue          # PDF・案内ページ等は対象外
             if re.search(r"(検索|探す|事業所|サービス|地域|市区町村|エリア)", t):
                 out.append(href)
         return list(dict.fromkeys(out))
 
-    def _find_city(self, city: str, exact: bool) -> Optional[str]:
-        """市区町村を選べる画面を探してたどり着き、選択する。
-
-        トップ→検索画面が1クリックとは限らないため、それらしいリンクを
-        2段までたどって探す。
-        """
-        self.get(self.base_url.format(code=self.pref_code))
-        kind = self._pick(city, exact, allow_text=True)
-        if kind:
-            return kind
-
-        self._click_text(NAV["to_search"], required=False)
-        kind = self._pick(city, exact, allow_text=True)
-        if kind:
-            return kind
-
+    def _explore(self, fn, depth: int = 2, limit: int = 8):
+        """今の画面で fn を試し、駄目なら関連リンクを depth 段までたどって探す。"""
+        r = fn()
+        if r:
+            return r
         seen = set()
         frontier = self._candidate_links()
-        for _ in range(2):
+        for _ in range(depth):
             nxt = []
-            for url in frontier[:8]:
+            for url in frontier[:limit]:
                 if url in seen:
                     continue
                 seen.add(url)
@@ -312,15 +361,30 @@ class Navigator:
                     self.get(url)
                 except SiteError:
                     continue
-                kind = self._pick(city, exact, allow_text=True)
-                if kind:
-                    log.info("市区町村を選べる画面: %s", url)
-                    return kind
+                r = fn()
+                if r:
+                    log.info("目的の画面: %s", url)
+                    return r
                 nxt.extend(self._candidate_links())
             frontier = [u for u in nxt if u not in seen]
             if not frontier:
                 break
         return None
+
+    def _find_city(self, city: str, exact: bool) -> Optional[str]:
+        """市区町村を選べる画面を探してたどり着き、選択する。
+
+        トップ→検索画面が1クリックとは限らないため、それらしいリンクを
+        たどって探す。
+        """
+        self.get(self.base_url.format(code=self.pref_code))
+        kind = self._pick(city, exact, allow_text=True)
+        if kind:
+            return kind
+
+        self._click_text(NAV["to_search"], required=False)
+        self._click_text(NAV["to_detail_search"], required=False)
+        return self._explore(lambda: self._pick(city, exact, allow_text=True))
 
     # ------------------------------------------------------------ high level
     def open_search_screen(self):
@@ -359,6 +423,17 @@ class Navigator:
         out.append(f"\n■ リンク {len(links)}個")
         out.append("  " + " / ".join(links[:80]))
 
+        texts = d.find_elements(By.XPATH, "//input[@type='text' or not(@type)]")
+        out.append(f"\n■ 文字入力欄 {len(texts)}個")
+        for el in texts[:15]:
+            out.append(f"  name={el.get_attribute('name')} id={el.get_attribute('id')} "
+                       f"placeholder={el.get_attribute('placeholder')}")
+
+        frames = d.find_elements(By.XPATH, "//iframe|//frame")
+        out.append(f"\n■ フレーム {len(frames)}個")
+        for fr in frames[:8]:
+            out.append(f"  name={fr.get_attribute('name')} src={fr.get_attribute('src')}")
+
         btns = []
         for xp in ("//button", "//input[@type='submit']", "//input[@type='button']"):
             for e in d.find_elements(By.XPATH, xp):
@@ -367,44 +442,145 @@ class Navigator:
                     btns.append(t)
         out.append(f"\n■ ボタン {len(btns)}個")
         out.append("  " + " / ".join(btns[:40]))
+
+        # フレームの中身も1段だけ覗く
+        for i in range(len(frames)):
+            try:
+                d.switch_to.default_content()
+                fs = d.find_elements(By.XPATH, "//iframe|//frame")
+                if i >= len(fs):
+                    break
+                d.switch_to.frame(fs[i])
+                labels_f = [self._clean(e.text) for e in d.find_elements(By.XPATH, "//label")]
+                links_f = [self._clean(e.text) for e in d.find_elements(By.XPATH, "//a[@href]")]
+                out.append(f"\n■ フレーム{i} の中身: "
+                           f"label {len([x for x in labels_f if x])}個 / "
+                           f"リンク {len([x for x in links_f if x])}個")
+                out.append("  " + " / ".join([x for x in (labels_f + links_f) if x][:40]))
+            except WebDriverException:
+                continue
+        try:
+            d.switch_to.default_content()
+        except WebDriverException:
+            pass
         return "\n".join(out)
 
-    def list_cities(self) -> List[str]:
-        """検索画面に並んでいる市区町村名を取得する（label/option/リンクから）。"""
-        self.open_search_screen()
+    def _city_texts_here(self) -> List[str]:
         texts = []
         for xp in ("//label", "//option", "//a[@href]"):
             for el in self.driver.find_elements(By.XPATH, xp):
-                texts.append(self._clean(el.text))
-        names = [t for t in texts if re.search(r"(市|区|町|村)$", t) and 2 <= len(t) <= 12]
+                try:
+                    texts.append(self._clean(el.text))
+                except WebDriverException:
+                    continue
+        return texts
+
+    @staticmethod
+    def _city_names(texts: List[str]) -> List[str]:
+        names = [
+            t for t in texts
+            if t and re.search(r"(市|区|町|村)$", t) and 2 <= len(t) <= 12
+        ]
         seen, out = set(), []
         for n in names:
             if n not in seen:
                 seen.add(n)
                 out.append(n)
-        log.debug("市区町村候補 %d件: %s", len(out), out[:20])
         return out
 
+    def _harvest_cities(self) -> List[str]:
+        """今の画面（フレーム内を含む）から市区町村名を集める。"""
+        names = self._city_names(self._city_texts_here())
+        if names:
+            return names
+        collected: List[str] = []
+
+        def grab():
+            found = self._city_names(self._city_texts_here())
+            if found:
+                collected.extend(found)
+                return True
+            return False
+
+        self._in_frames(grab)
+        return self._city_names(collected)
+
+    def list_cities(self, service_label: Optional[str] = None) -> List[str]:
+        """市区町村名の一覧を取得する。
+
+        実サイトではサービスを選ぶまで所在地の選択肢が現れないため、
+        必要ならサービスを選んでから集める。
+        """
+        self.get(self.base_url.format(code=self.pref_code))
+        self._click_text(NAV["to_search"], required=False)
+        self._click_text(NAV["to_detail_search"], required=False)
+
+        def try_here():
+            found = self._harvest_cities()
+            if found:
+                return found
+            if service_label and self._pick(service_label, False):
+                if not self._click_text(NAV["next_step"], required=False):
+                    self._click_text(NAV["search_button"], required=False)
+                return self._harvest_cities()
+            return None
+
+        names = self._explore(try_here) or []
+        log.debug("市区町村候補 %d件: %s", len(names), names[:20])
+        return names
+
     def search(self, city: str, service_label: str, exact: bool = False) -> None:
-        """市区町村とサービス種別を指定して検索を実行する。"""
-        kind = self._find_city(city, exact)
+        """サービス種別 → 市区町村 の順に選んで検索を実行する。
+
+        実サイトは「詳しい条件で探す」→「サービスの選択」→「事業所の所在地選択」
+        の順で、サービスを選ぶまで所在地の選択肢が現れない。この順序を既定とし、
+        違う作りのサイトでも動くよう、駄目なら従来の探索に切り替える。
+        """
+        self.get(self.base_url.format(code=self.pref_code))
+        self._click_text(NAV["to_search"], required=False)
+        self._click_text(NAV["to_detail_search"], required=False)
+
+        svc = self._pick(service_label, False)
+        if svc:
+            log.debug("サービス種別『%s』を %s で選択", service_label, svc)
+
+        kind = self._pick(city, exact, allow_text=True)
+        if kind is None and svc:
+            # サービスを選ぶ画面と所在地を選ぶ画面が分かれている場合
+            if not self._click_text(NAV["next_step"], required=False):
+                self._click_text(NAV["search_button"], required=False)
+            kind = self._pick(city, exact, allow_text=True)
+
         if kind is None:
+            # 想定と異なる作りのとき: 市区町村を選べる画面を探し回る
+            kind = self._find_city(city, exact)
+            if kind is not None and svc is None:
+                svc = self._pick(service_label, False)
+
+        if kind is None:
+            try:
+                log.error("市区町村が見つからなかった画面の構造:\n%s", self.describe_page())
+            except WebDriverException:
+                pass
             raise SiteError(
                 f"市区町村『{city}』を選べる画面が見つかりません"
                 f"（最後に見た画面: {self.driver.current_url}）"
                 "／『診断する.bat』で画面の作りを確認してください"
             )
         log.debug("市区町村『%s』を %s で選択", city, kind)
-
-        svc = self._pick(service_label, False)
+        if svc is None:
+            # 市区町村を選んだ後の画面でサービスを選ばせる作りもある
+            svc = self._pick(service_label, False)
+            if svc:
+                log.debug("サービス種別『%s』を %s で選択（所在地の後）", service_label, svc)
         if svc is None:
             log.warning("サービス種別『%s』が見つかりません。全件のまま進みます", service_label)
 
-        if kind == "link" and svc is None:
-            # 市区町村リンクで既に一覧へ遷移しているとみなす
-            pass
-        else:
-            self._click_text(NAV["search_button"], required=False)
+        if not (kind == "link" and svc is None):
+            if not self._click_text(NAV["search_button"], required=False):
+                self._in_frames(
+                    lambda: self._click_text(NAV["search_button"], required=False)
+                )
         try:
             WebDriverWait(self.driver, 30).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))

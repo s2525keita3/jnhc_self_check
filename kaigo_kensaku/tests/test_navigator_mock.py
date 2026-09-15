@@ -31,12 +31,15 @@ def browser_available() -> bool:
 class MockFlowMixin:
     variant = "checkbox"
 
+    site = None
+
     def run_flow(self, city, service_name, expect):
         from src.navigator import Navigator
 
         services = load_services(BASE)
         sd = services[service_name]
         with MockSite(self.variant) as site:
+            self.site = site
             nav = Navigator(
                 pref="兵庫県", pref_code="28", display=False, wait=0,
                 retry=2, base_url=site.base_url,
@@ -156,6 +159,50 @@ class TestTextOnlyVariant(MockFlowMixin, unittest.TestCase):
         self.assertTrue(all("西宮市" in r["事業所名"] for r in rows))
 
 
+class TestRealFlowVariant(MockFlowMixin, unittest.TestCase):
+    """実サイトの導線（サービス選択 → 所在地選択）を再現した構成。"""
+
+    variant = "real"
+
+    def test_kyotaku(self):
+        rows = self.run_flow("西宮市", "居宅介護支援", 12)
+        self.assertEqual(rows[0]["市区町村"], "西宮市")
+        self.assertEqual(rows[0]["常勤"], 2)
+        self.assertEqual(rows[0]["（Ⅱ）"], "あり")
+        self.assertEqual(self.site.pdf_hits, 0, "PDFを開いてしまっている")
+
+    def test_houkan(self):
+        rows = self.run_flow("芦屋市", "訪問看護", 3)
+        self.assertEqual(rows[0]["サービス種別"], "訪問看護")
+        self.assertEqual(rows[0]["緊急時訪問看護加算"], "あり")
+
+    def test_ward(self):
+        rows = self.run_flow("神戸市中央区", "居宅介護支援", 3)
+        self.assertEqual(rows[0]["市区町村"], "神戸市中央区")
+
+
+class TestIframeVariant(MockFlowMixin, unittest.TestCase):
+    """検索フォームが iframe の中にあっても動くこと。"""
+
+    variant = "iframe"
+
+    def test_kyotaku(self):
+        rows = self.run_flow("西宮市", "居宅介護支援", 12)
+        self.assertEqual(rows[0]["市区町村"], "西宮市")
+        self.assertEqual(rows[0]["常勤"], 2)
+
+
+class TestPdfTrapVariant(MockFlowMixin, unittest.TestCase):
+    """PDFや案内ページのリンクをたどらないこと（実サイトで起きた誤追尾）。"""
+
+    variant = "pdftrap"
+
+    def test_does_not_follow_pdf(self):
+        rows = self.run_flow("西宮市", "居宅介護支援", 12)
+        self.assertEqual(rows[0]["市区町村"], "西宮市")
+        self.assertEqual(self.site.pdf_hits, 0, "PDFを開いてしまっている")
+
+
 @unittest.skipUnless(browser_available(), "Chrome/chromedriver が無いためスキップ")
 class TestUnknownCity(unittest.TestCase):
     def test_raises_clear_error(self):
@@ -177,11 +224,11 @@ class TestCityListing(unittest.TestCase):
     def test_list_cities_all_variants(self):
         from src.navigator import Navigator
 
-        for variant in ("checkbox", "link", "select"):
+        for variant in ("checkbox", "link", "select", "real", "iframe", "deep"):
             with MockSite(variant) as site:
                 nav = Navigator("兵庫県", "28", False, 0, 2, base_url=site.base_url)
                 try:
-                    cities = nav.list_cities()
+                    cities = nav.list_cities("居宅介護支援")
                 finally:
                     nav.close()
             self.assertIn("西宮市", cities, f"{variant} で市区町村一覧が取れない")
