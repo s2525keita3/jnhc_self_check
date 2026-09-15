@@ -30,6 +30,7 @@ class Report:
     meta: Dict[str, object] = field(default_factory=dict)
     output_path: str = ""
     cancelled: bool = False
+    trial: bool = False          # お試し実行（件数を絞った）かどうか
 
     @property
     def total_rows(self) -> int:
@@ -97,8 +98,11 @@ def collect(
     tick = on_progress or (lambda *a: None)
     stop = should_stop or (lambda: False)
 
+    limit = max(0, int(getattr(settings, "limit", 0) or 0))
     started = datetime.now()
     rep = Report()
+    rep.trial = bool(limit)
+    trial_rows: Dict[str, List[dict]] = {}
     found_columns: Dict[str, set] = {}
     label_samples: Dict[str, list] = {}
     fetched: Dict[str, int] = {}      # 今回実際に取得した自治体数（サービス別）
@@ -122,8 +126,11 @@ def collect(
                                exact=(settings.search_type == "exact"))
                     listings = nav.collect_listings()
                     shown = nav.last_total_on_site
+                    if limit:
+                        listings = listings[:limit]
                     # サイトが「◯件」と表示している数と突き合わせ、取りこぼしを検知する
-                    if shown is not None and shown != len(listings):
+                    # （お試し実行は最初から件数を絞っているので対象外）
+                    if not limit and shown is not None and shown != len(listings):
                         msg = (f"{city} / {svc_name}: サイトの表示は{shown}件ですが"
                                f"{len(listings)}件しか取得できませんでした")
                         rep.errors.append(msg)
@@ -148,8 +155,13 @@ def collect(
                             ]
                         rows.append(row)
                         tick(step - 1, total, head, i, len(listings))
-                    progress.put(svc_name, city, rows)
-                    progress.save()
+                    if limit:
+                        # お試しのぶんは進捗に残さない。残すと次回の本番実行で
+                        # 「取得済み」と判断され、5件だけのデータが出てしまう
+                        trial_rows.setdefault(svc_name, []).extend(rows)
+                    else:
+                        progress.put(svc_name, city, rows)
+                        progress.save()
                     fetched[svc_name] = fetched.get(svc_name, 0) + 1
                     tick(step, total, head, len(listings), len(listings))
                 except SiteError as e:
@@ -162,7 +174,10 @@ def collect(
         say("停止しました。取得済みのぶんを書き出します")
 
     # 今回選んだ市区町村のぶんだけを出力する（過去の取得ぶんを混ぜない）
-    rep.data = {name: progress.collected(name, cities) for name in services}
+    if limit:
+        rep.data = {name: trial_rows.get(name, []) for name in services}
+    else:
+        rep.data = {name: progress.collected(name, cities) for name in services}
     rep.meta = {
         "実行日時": started.strftime("%Y/%m/%d %H:%M"),
         "都道府県": settings.pref,
@@ -170,6 +185,10 @@ def collect(
         "サービス種別": ", ".join(services),
         "失敗した検索": "\n".join(rep.errors) or "なし",
     }
+    if limit:
+        rep.meta["取得方法"] = (
+            f"お試し実行：1つの市区町村につき先頭{limit}件だけ取得しました。"
+            "すべて取得するには、お試しを外して実行してください")
     if rep.cancelled:
         rep.meta["備考"] = "途中で停止しました。再実行すると続きから取得します"
 
@@ -217,13 +236,18 @@ def collect(
         say(f"※ {name}: ほぼ全件が空欄の列があります → {', '.join(bad)}")
         say("   config/fields_*.csv の lookup 列で対応できます")
 
-    if not rep.cancelled and not rep.errors:
+    if not rep.cancelled and not rep.errors and not limit:
         # 全部取り切ったので、再開用の進捗は役目を終えた。
         # 残したままだと次回の実行が「取得済み」と判断して古いデータを出す。
         progress.clear()
 
+    out = settings.output_path
+    if limit:
+        # 本番データと取り違えないよう、ファイル名で区別する
+        base, ext = os.path.splitext(out)
+        out = f"{base}_お試し{ext}"
     rep.output_path = write_workbook(
-        settings.output_path, services, rep.data,
+        out, services, rep.data,
         summary_sheet=settings.summary_sheet,
         per_city_sheet=settings.per_city_sheet,
         decorate=settings.decorate,

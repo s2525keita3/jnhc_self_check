@@ -125,12 +125,45 @@ class TestGuiRun(unittest.TestCase):
         self.app._start()
         self.assertIn("市区町村", self.app.warn_label.cget("text"))
 
+    def test_trial_checkbox(self):
+        """お試しのチェックで件数上限が渡ること。"""
+        self.app.trial_var.set(False)
+        self.assertEqual(self.app.trial_limit(), 0)
+        self.app.trial_var.set(True)
+        self.app.trial_n.configure(state="normal")
+        self.app.trial_n.delete(0, "end")
+        self.app.trial_n.insert(0, "3")
+        self.assertEqual(self.app.trial_limit(), 3)
+        self.app.trial_n.delete(0, "end")       # 空欄や不正値でも落ちないこと
+        self.assertEqual(self.app.trial_limit(), 5)
+
+    def test_trial_run_makes_separate_file(self):
+        from openpyxl import load_workbook
+
+        self.app._set_all(False)
+        self.app.city_vars["西宮市"].set(True)
+        self.app.svc_vars["訪問看護"].set(False)
+        self.app.trial_var.set(True)
+        self.app.trial_n.configure(state="normal")
+        self.app.trial_n.delete(0, "end")
+        self.app.trial_n.insert(0, "2")
+        self.app._start()
+        self.assertTrue(
+            self.wait_until(lambda: self.app.run_btn.cget("state") == "normal", 180),
+            "お試し実行が終わらない",
+        )
+        self.assertIn("お試し", os.path.basename(self.app.last_output))
+        wb = load_workbook(self.app.last_output)
+        self.assertEqual(wb["居宅_全件"].max_row, 3 + 2)
+        self.assertIn("お試し", self.app.status.cget("text"))
+
     def test_run_produces_excel(self):
         from openpyxl import load_workbook
 
         self.app._set_all(False)
         self.app.city_vars["芦屋市"].set(True)
         self.app.svc_vars["訪問看護"].set(False)
+        self.app.trial_var.set(False)
         self.app._start()
         self.assertEqual(self.app.run_btn.cget("state"), "disabled")
         self.assertTrue(

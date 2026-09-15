@@ -35,6 +35,7 @@ normalize = True
 wait = 0
 retry = 2
 resume = {resume}
+limit = {limit}
 """
 
 
@@ -53,9 +54,10 @@ class TestEndToEnd(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.work, ignore_errors=True)
 
-    def _write_settings(self, cities, services, resume="True"):
+    def _write_settings(self, cities, services, resume="True", limit=0):
         with open(os.path.join(self.work, "settings.ini"), "w", encoding="utf-8") as f:
-            f.write(SETTINGS.format(cities=cities, services=services, resume=resume))
+            f.write(SETTINGS.format(cities=cities, services=services,
+                                    resume=resume, limit=limit))
 
     def _run(self, site, extra=()):
         env = dict(os.environ, KAIGO_BASE_URL=site.base_url, PYTHONIOENCODING="utf-8")
@@ -256,6 +258,66 @@ class TestStaleProgress(unittest.TestCase):
         self.assertEqual(p.done, [])
         self.assertEqual(p.rows, {})
         self.assertFalse(os.path.exists(path))
+
+@unittest.skipUnless(browser_available(), "Chrome/chromedriver が無いためスキップ")
+class TestTrialRun(unittest.TestCase):
+    """お試し実行（件数を絞る）の検証。
+
+    お試しの結果が本番データと混ざると、5件しかない一覧を全件だと
+    思い込む事故になる。ファイル名で区別し、進捗にも残さないこと。
+    """
+
+    def setUp(self):
+        self.work = tempfile.mkdtemp()
+        for item in ("main.py", "src", "config"):
+            src = os.path.join(BASE, item)
+            dst = os.path.join(self.work, item)
+            if os.path.isdir(src):
+                shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__"))
+            else:
+                shutil.copy2(src, dst)
+
+    def tearDown(self):
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def _run(self, site, limit):
+        with open(os.path.join(self.work, "settings.ini"), "w", encoding="utf-8") as f:
+            f.write(SETTINGS.format(cities="西宮市", services="居宅介護支援",
+                                    resume="True", limit=limit))
+        env = dict(os.environ, KAIGO_BASE_URL=site.base_url, PYTHONIOENCODING="utf-8")
+        return subprocess.run([sys.executable, "main.py"], cwd=self.work, env=env,
+                              capture_output=True, text=True, timeout=600,
+                              stdin=subprocess.DEVNULL)
+
+    def test_trial_limits_rows_and_marks_file(self):
+        from openpyxl import load_workbook
+
+        with MockSite("real") as site:
+            r = self._run(site, limit=5)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+        out = os.path.join(self.work, "出力_お試し.xlsx")
+        self.assertTrue(os.path.exists(out), f"お試し用のファイル名になっていない: {r.stdout}")
+        self.assertFalse(os.path.exists(os.path.join(self.work, "出力.xlsx")))
+        wb = load_workbook(out)
+        self.assertEqual(wb["居宅_全件"].max_row, 3 + 5, "5件に絞られていない")
+        summary = [str(c.value) for row in wb["実行サマリ"].iter_rows() for c in row]
+        self.assertTrue(any("お試し" in t for t in summary), "お試しである旨が残っていない")
+        # 127件中5件しか取っていないのに「取りこぼし」と誤警告しないこと
+        self.assertNotIn("要確認", r.stdout)
+
+    def test_trial_does_not_pollute_progress(self):
+        with MockSite("real") as site:
+            self._run(site, limit=5)
+            self.assertFalse(
+                os.path.exists(os.path.join(self.work, "logs", "progress.json")),
+                "お試しの結果が進捗に残っている（次回の本番実行で5件だけになる）",
+            )
+            r2 = self._run(site, limit=0)
+        self.assertEqual(r2.returncode, 0, r2.stdout + r2.stderr)
+        self.assertNotIn("取得済みのためスキップ", r2.stdout)
+        self.assertIn("… 12件", r2.stdout, "本番実行が全件を取れていない")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

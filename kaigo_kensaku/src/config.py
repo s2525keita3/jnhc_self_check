@@ -47,6 +47,7 @@ class Settings:
     wait: float
     retry: int
     resume: bool
+    limit: int = 0          # 1自治体あたりの取得件数の上限（0＝すべて）
 
     @property
     def log_dir(self) -> str:
@@ -94,6 +95,7 @@ def load_settings(base_dir: str) -> Settings:
         wait=float(g("run", "wait", "1.0") or 1.0),
         retry=int(g("run", "retry", "3") or 3),
         resume=_b(g("run", "resume", "True")),
+        limit=int(g("run", "limit", "0") or 0),
     )
 
 

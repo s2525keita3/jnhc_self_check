@@ -119,6 +119,7 @@ class App(ctk.CTk):
         self.started_at = 0.0
 
         self._build()
+        self._update_trial()
         self.log("市区町村とサービスを選んで「実行」を押してください")
         self.log("途中で止めても、次回は続きから取得します")
         self._load_cities(initial=True)
@@ -205,7 +206,7 @@ class App(ctk.CTk):
         # ---- 実行
         run_bar = ctk.CTkFrame(self, fg_color="transparent")
         run_bar.grid(row=2, column=0, sticky="ew", padx=14, pady=(2, 6))
-        run_bar.grid_columnconfigure(2, weight=1)
+        run_bar.grid_columnconfigure(3, weight=1)
         self.run_btn = ctk.CTkButton(run_bar, text="実行", width=150, height=40,
                                      font=font(15, True), command=self._start)
         self.run_btn.grid(row=0, column=0, padx=(0, 10))
@@ -215,11 +216,21 @@ class App(ctk.CTk):
                       border_width=1, border_color="gray45", hover_color="gray90",
                                       command=self._stop)
         self.stop_btn.grid(row=0, column=1)
+        trial = ctk.CTkFrame(run_bar, fg_color="transparent")
+        trial.grid(row=0, column=2, sticky="w", padx=(16, 0))
+        self.trial_var = ctk.BooleanVar(value=bool(self.settings.limit))
+        ctk.CTkCheckBox(trial, text="お試し：各市区町村", variable=self.trial_var,
+                        font=font(13), command=self._update_trial).grid(row=0, column=0)
+        self.trial_n = ctk.CTkEntry(trial, width=48, font=font(13), justify="center")
+        self.trial_n.insert(0, str(self.settings.limit or 5))
+        self.trial_n.grid(row=0, column=1, padx=4)
+        ctk.CTkLabel(trial, text="件まで", font=font(13)).grid(row=0, column=2)
+
         self.status = ctk.CTkLabel(run_bar, text="待機中", font=font(14), anchor="w")
-        self.status.grid(row=0, column=2, sticky="ew", padx=16)
+        self.status.grid(row=0, column=3, sticky="ew", padx=16)
         self.warn_label = ctk.CTkLabel(run_bar, text="", font=font(13, True),
                                        text_color="#c0392b", anchor="w")
-        self.warn_label.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        self.warn_label.grid(row=1, column=0, columnspan=4, sticky="w", pady=(4, 0))
 
         self.bar = ctk.CTkProgressBar(self, height=14)
         self.bar.grid(row=3, column=0, sticky="ew", padx=14, pady=(2, 8))
@@ -373,6 +384,18 @@ class App(ctk.CTk):
     def selected_services(self):
         return {n: sd for n, sd in self.services.items() if self.svc_vars[n].get()}
 
+    def _update_trial(self):
+        self.trial_n.configure(state="normal" if self.trial_var.get() else "disabled")
+
+    def trial_limit(self) -> int:
+        """お試し実行の件数上限（0＝すべて取得）。"""
+        if not self.trial_var.get():
+            return 0
+        try:
+            return max(1, int(self.trial_n.get().strip() or "5"))
+        except ValueError:
+            return 5
+
     def _estimate_minutes(self, n_search: int) -> int:
         """所要時間の目安（分）。1検索あたりの実績値から概算する。"""
         return max(1, round(n_search * MINUTES_PER_SEARCH))
@@ -383,15 +406,20 @@ class App(ctk.CTk):
         数時間かかる処理を、範囲を間違えたまま始めてしまう事故を防ぐ。
         """
         n = len(cities) * len(services)
-        mins = self._estimate_minutes(n)
+        limit = self.trial_limit()
+        mins = 1 if limit else self._estimate_minutes(n)
         shown = "、".join(cities[:12]) + (f" ほか{len(cities) - 12}件" if len(cities) > 12 else "")
-        when = f"約{mins}分" if mins < 90 else f"約{mins / 60:.1f}時間"
+        when = ("数分" if limit else
+                (f"約{mins}分" if mins < 90 else f"約{mins / 60:.1f}時間"))
         body = (
             f"【サービス】{'、'.join(services)}\n"
             f"【市区町村】{len(cities)}件\n　{shown}\n\n"
             f"検索回数 {n}回 ／ 所要時間の目安 {when}\n"
         )
-        if len(cities) >= 10:
+        if limit:
+            body = (f"【お試し実行】各市区町村ごとに先頭{limit}件だけ取得します。\n"
+                    "　ファイル名に「_お試し」が付きます。\n\n") + body
+        elif len(cities) >= 10:
             body += "\n※ 対象が多いため、長時間かかります。\n" \
                     "　 途中で停止しても、次回は続きから取得できます。\n"
         body += "\nこの内容で取得を始めますか？"
@@ -415,18 +443,23 @@ class App(ctk.CTk):
         self.open_xlsx.configure(state="disabled")
         self.bar.set(0)
         self.started_at = time.time()
-        self.log(f"開始：{len(cities)}自治体 × {len(services)}サービス")
+        limit = self.trial_limit()
+        self.log(f"開始：{len(cities)}自治体 × {len(services)}サービス"
+                 + (f"（お試し：各{limit}件まで）" if limit else ""))
         self.worker = threading.Thread(
-            target=self._work, args=(self.pref_box.get(), cities, services), daemon=True)
+            target=self._work,
+            args=(self.pref_box.get(), cities, services, self.trial_limit()),
+            daemon=True)
         self.worker.start()
 
-    def _work(self, pref, cities, services):
+    def _work(self, pref, cities, services, limit=0):
         # 別スレッドから画面部品を触ってはいけないため、必要な値は引数で受け取る
         nav = None
         try:
             with Lock(BASE_DIR):
                 s = cfg.load_settings(BASE_DIR)
                 s.pref = pref
+                s.limit = limit
                 nav = runner.make_navigator(s, self.prefs[s.pref])
                 progress = Progress(os.path.join(s.log_dir, "progress.json"))
                 if s.resume:
@@ -532,6 +565,8 @@ class App(ctk.CTk):
         self.last_output = rep.output_path
         self.open_xlsx.configure(state="normal")
         word = "停止しました" if rep.cancelled else "完了しました"
+        if getattr(rep, "trial", False):
+            word += "（お試し）"
         self.status.configure(text=f"{word}：{rep.total_rows}件")
         self.log(f"{word}：{rep.total_rows}件を出力  {rep.output_path}")
         if rep.errors:
