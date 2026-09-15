@@ -83,6 +83,19 @@ def save_cities(pref_code: str, cities):
         pass
 
 
+def save_display_needed(base_dir: str, needed: bool) -> None:
+    """ブラウザ表示が必要だったことを settings.ini に書き戻す。"""
+    path = os.path.join(base_dir, "settings.ini")
+    try:
+        with open(path, encoding="utf-8-sig") as f:
+            text = f.read()
+        if needed and "display = False" in text:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text.replace("display = False", "display = True", 1))
+    except OSError:
+        pass
+
+
 def open_in_explorer(path: str):
     try:
         if sys.platform.startswith("win"):
@@ -294,15 +307,40 @@ class App(ctk.CTk):
             self.status.configure(text="待機中")
 
     def _fetch_cities(self, pref: str, code: str):
+        """市区町村の一覧を取得する。
+
+        ブラウザ非表示（headless）だと、サイト側の作りによっては画面が
+        組み上がらず1件も取れないことがある。その場合はブラウザを表示して
+        もう一度試す。利用者に設定を触らせずに済ませるため。
+        """
         try:
             s = cfg.load_settings(BASE_DIR)
             s.pref = pref
-            nav = runner.make_navigator(s, code)
-            try:
-                label = next(iter(self.services.values())).site_label
-                cities = nav.list_cities(label)
-            finally:
-                nav.close()
+            label = next(iter(self.services.values())).site_label
+            cities = []
+            for attempt, display in enumerate(([s.display, True] if not s.display
+                                               else [True])):
+                if attempt:
+                    self.events.put((
+                        "log",
+                        "ブラウザ非表示では取得できませんでした。"
+                        "ブラウザを表示してもう一度試します（画面が開きます）",
+                    ))
+                s.display = display
+                nav = runner.make_navigator(s, code)
+                try:
+                    cities = nav.list_cities(label)
+                finally:
+                    nav.close()
+                if cities:
+                    if attempt:
+                        self.events.put((
+                            "log",
+                            "取得できました。以後この都道府県では"
+                            "『ブラウザを表示』で動かします",
+                        ))
+                        save_display_needed(BASE_DIR, True)
+                    break
             if cities:
                 save_cities(code, cities)
             self.events.put(("cities", cities))

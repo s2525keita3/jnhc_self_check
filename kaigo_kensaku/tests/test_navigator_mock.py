@@ -222,6 +222,52 @@ class TestImageTabVariant(MockFlowMixin, unittest.TestCase):
         self.assertEqual(rows[0]["（Ⅱ）"], "あり")
 
 
+class TestJsRenderedVariant(MockFlowMixin, unittest.TestCase):
+    """検索フォームを JavaScript で組み立てるサイトでも取得できること。
+
+    実サイトは jQuery でフォームを作るため、HTMLが届いた時点では中身が無い。
+    読み込み完了を待たずに読むと市区町村が1件も取れず、
+    「市区町村を取得できませんでした」になる（実際にこの不具合を出した）。
+    """
+
+    variant = "js"
+
+    def test_get_waits_for_javascript(self):
+        """ページ取得は、JavaScript が画面を組み立て終わるまで戻らないこと。
+
+        これが守られないと、まだ空の画面を読んでしまい、市区町村が
+        1件も取れない。pageLoadStrategy を eager にして速くしようとして
+        実際にこの不具合を出した。
+        """
+        from src.navigator import Navigator
+
+        with MockSite("js") as site:
+            nav = Navigator("兵庫県", "28", False, 0, 2, base_url=site.base_url)
+            try:
+                nav.get(site.base_url.format(code="28")
+                        + "index.php?action_kouhyou_search=true")
+                html = nav.html
+            finally:
+                nav.close()
+        self.assertIn("西宮市", html, "組み立てが終わる前に読み取っている")
+
+    def test_cities_are_found(self):
+        from src.navigator import Navigator
+
+        with MockSite("js") as site:
+            nav = Navigator("兵庫県", "28", False, 0, 2, base_url=site.base_url)
+            try:
+                cities = nav.list_cities("居宅介護支援")
+            finally:
+                nav.close()
+        self.assertIn("西宮市", cities, "JavaScriptで組み立てた画面から市区町村が取れない")
+        self.assertIn("神戸市中央区", cities)
+
+    def test_kyotaku(self):
+        rows = self.run_flow("西宮市", "居宅介護支援", 12)
+        self.assertEqual(rows[0]["市区町村"], "西宮市")
+
+
 class TestIframeVariant(MockFlowMixin, unittest.TestCase):
     """検索フォームが iframe の中にあっても動くこと。"""
 

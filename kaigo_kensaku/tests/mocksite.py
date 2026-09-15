@@ -12,6 +12,10 @@
   variant "deadnext" : 「次へ」が常に出るが同じページに戻る（無限ループ対策の確認用）
   variant "iframe"   : 検索フォームが iframe の中にある構成
   variant "pdftrap"  : トップにPDF等の紛らわしいリンクが並ぶ構成（誤追尾の確認用）
+  variant "js"       : 検索フォームを JavaScript で組み立てる構成。
+                       実サイトは jQuery でフォームを作るため、HTMLが届いた
+                       時点では中身が無い。読み込み完了を待たずに読むと
+                       市区町村が1件も取れない。
   variant "real"     : 実サイトの導線を再現した構成。
                        トップ →「介護事業所を検索する」→「詳しい条件で探す」
                        → サービスの選択 →（次へ進む）→ 事業所の所在地選択 → 検索。
@@ -30,6 +34,7 @@
 from __future__ import annotations
 
 import threading
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -141,6 +146,17 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
+        if u.path.endswith("slow.js"):
+            # 読み込みに時間のかかる外部スクリプト。これを待たずに読むと
+            # 画面がまだ組み立てられていない
+            time.sleep(0.6)
+            body = b"/* dummy */"
+            self.send_response(200)
+            self.send_header("Content-Type", "application/javascript")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if u.path.endswith(".pdf"):
             Handler.pdf_hits += 1
             body = b"%PDF-1.4 dummy"
@@ -255,6 +271,31 @@ class Handler(BaseHTTPRequestHandler):
         v = Handler.variant
         if v in ("iframe", "pdftrap"):
             v = "checkbox"
+        if v == "js":
+            # 中身は空で届き、あとから JavaScript が組み立てる
+            cities = "".join(
+                f"<label for=\\'c{i}\\'><input type=\\'checkbox\\' id=\\'c{i}\\' "
+                f"name=\\'city\\' value=\\'{c}\\'>{c}</label> "
+                for i, c in enumerate(CITIES)
+            )
+            svcs = "".join(
+                f"<label for=\\'s{i}\\'><input type=\\'checkbox\\' id=\\'s{i}\\' "
+                f"name=\\'svc\\' value=\\'{x}\\'>{x}</label> "
+                for i, x in enumerate(SERVICES)
+            )
+            return _page(
+                "<div id='form'></div>"
+                "<script src='slow.js'></script>"
+                "<script>"
+                "window.addEventListener('load', function() {"
+                "  document.getElementById('form').innerHTML = "
+                "\"<form action='index.php' method='get'>"
+                "<input type='hidden' name='action_kouhyou_result' value='true'>"
+                f"{svcs}{cities}"
+                "<input type='submit' value='検索する'></form>\";"
+                "});"
+                "</script>"
+            )
         if v == "link":
             links = "".join(
                 f"<a href='index.php?action_kouhyou_search_svc=true&city="

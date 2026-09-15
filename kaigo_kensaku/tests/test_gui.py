@@ -246,5 +246,65 @@ class TestFirstLaunch(unittest.TestCase):
             app._on_close()
 
 
+@unittest.skipUnless(gui_available(), "tkinter/customtkinter/画面が無いためスキップ")
+class TestCityFetchFallback(unittest.TestCase):
+    """非表示で取れなかったら、ブラウザを表示して取り直すこと。
+
+    実サイトでは、ブラウザ非表示のときに市区町村が1件も取れない事象が起きた。
+    利用者に settings.ini を触らせず、ツール側で復旧する。
+    """
+
+    def setUp(self):
+        self.work = tempfile.mkdtemp()
+        shutil.copytree(os.path.join(BASE, "config"), os.path.join(self.work, "config"))
+        with open(os.path.join(BASE, "settings.ini"), encoding="utf-8-sig") as f:
+            ini = f.read().replace("display = True", "display = False")
+        with open(os.path.join(self.work, "settings.ini"), "w", encoding="utf-8") as f:
+            f.write(ini)
+        self.cache = os.path.join(self.work, "config", "cities_cache")
+        import gui
+        self.gui = gui
+        gui.BASE_DIR = self.work
+        gui.CACHE_DIR = self.cache
+        self.calls = []
+
+        class FakeNav:
+            def __init__(inner, display):
+                inner.display = display
+
+            def list_cities(inner, label):
+                self.calls.append(inner.display)
+                return ["西宮市", "芦屋市"] if inner.display else []
+
+            def close(inner):
+                pass
+
+        self._orig = gui.runner.make_navigator
+        gui.runner.make_navigator = lambda s, code: FakeNav(s.display)
+        # 起動時の自動取得は止め、この検証だけを走らせる
+        self._orig_load = gui.App._load_cities
+        gui.App._load_cities = lambda self, initial=False, force=False: None
+
+    def tearDown(self):
+        self.gui.runner.make_navigator = self._orig
+        self.gui.App._load_cities = self._orig_load
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def test_retries_with_visible_browser(self):
+        app = self.gui.App()
+        try:
+            app._fetch_cities("兵庫県", "28")
+            self.assertEqual(self.calls, [False, True], "表示ありで取り直していない")
+            kind, payload = app.events.get_nowait(), None
+            while kind[0] != "cities":
+                kind = app.events.get_nowait()
+            self.assertEqual(kind[1], ["西宮市", "芦屋市"])
+            # 次回からは最初から表示ありで動くよう、設定に書き戻すこと
+            with open(os.path.join(self.work, "settings.ini"), encoding="utf-8-sig") as f:
+                self.assertIn("display = True", f.read())
+        finally:
+            app._on_close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

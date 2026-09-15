@@ -120,22 +120,29 @@ class Navigator:
         opts = Options()
         if not display:
             opts.add_argument("--headless=new")
+            # 「HeadlessChrome」と名乗ると弾くサイトがあるため、通常の
+            # ブラウザと同じ名乗りにする
+            opts.add_argument(
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/141.0.0.0 Safari/537.36"
+            )
         opts.add_argument("--window-size=1400,1000")
         opts.add_argument("--disable-gpu")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
         opts.add_argument("--lang=ja-JP")
         opts.add_experimental_option("excludeSwitches", ["enable-logging"])
-        # 使うのはHTMLのテキストだけ。画像・通知・位置情報は取りに行かない。
-        # 相手サイトへのリクエスト数が大きく減り、こちらも速くなる
+        # 通知や位置情報の確認ダイアログは出さない。
+        # 画像の読み込みは止めない。止めても速度への効果は限定的な一方、
+        # 実サイトで検証できていない変更は、取得できなくなる危険のほうが大きい
         opts.add_experimental_option("prefs", {
-            "profile.managed_default_content_settings.images": 2,
             "profile.default_content_setting_values.notifications": 2,
             "profile.default_content_setting_values.geolocation": 2,
         })
-        opts.add_argument("--blink-settings=imagesEnabled=false")
-        # DOMが揃った時点で戻る（画像やサブリソースの読み込み完了を待たない）
-        opts.set_capability("pageLoadStrategy", "eager")
+        # pageLoadStrategy は既定（normal）のまま。実サイトは JavaScript で
+        # 画面を組み立てるため、eager にすると組み立て前の空の画面を読んで
+        # しまい、市区町村が1件も取れなくなる。速度より確実性を取る。
         # テスト環境向けの差し替え（通常は未設定でよい）
         binary = os.environ.get("KAIGO_CHROME_BINARY")
         if binary:
@@ -170,8 +177,24 @@ class Navigator:
                 time.sleep(2 ** i)
         raise SiteError(f"{what} に失敗しました: {last}")
 
+    def _wait_ready(self, timeout: float = 20.0) -> None:
+        """JavaScript による画面の組み立てが終わるまで待つ。
+
+        実サイトは jQuery で検索フォームを作るため、HTMLが届いた時点では
+        まだ中身が無い。readyState を見てから次の操作に移る。
+        """
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            try:
+                if self.driver.execute_script("return document.readyState") == "complete":
+                    return
+            except WebDriverException:
+                return
+            time.sleep(0.15)
+
     def get(self, url: str):
         self._retry(lambda: self.driver.get(url), f"ページ取得({url})")
+        self._wait_ready()
         self._sleep()
         self.dump(url)
 
@@ -205,6 +228,7 @@ class Navigator:
                 els = [e for e in self.driver.find_elements(By.XPATH, xp) if e.is_displayed()]
                 if els:
                     self.driver.execute_script("arguments[0].click();", els[0])
+                    self._wait_ready()
                     self._sleep()
                     self.dump(f"click_{text}")
                     return True
@@ -568,6 +592,14 @@ class Navigator:
 
         names = self._explore(try_here) or []
         log.debug("市区町村候補 %d件: %s", len(names), names[:20])
+        if not names:
+            # 0件のまま返すと画面には「取得できませんでした」としか出ない。
+            # 何が見えていたのかをログに残しておく
+            try:
+                log.error("市区町村が1件も取れませんでした。最後に見た画面:\n%s",
+                          self.describe_page())
+            except WebDriverException:
+                pass
         return names
 
     def search(self, city: str, service_label: str, exact: bool = False) -> None:
