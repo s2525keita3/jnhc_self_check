@@ -23,7 +23,19 @@ echo 確認できました。画面を開きます。
 echo.
 echo （この黒い画面は閉じないでください。ツールの画面が別に開きます）
 %PY% gui.py
+if errorlevel 1 goto RUNFAIL
 goto END
+
+:RUNFAIL
+echo.
+echo ------------------------------------------------------------
+echo 画面を開けませんでした。
+echo 上に出ているメッセージと、logs フォルダの
+echo itakukaigokensaku.log を送ってください。
+echo ------------------------------------------------------------
+echo.
+pause
+exit /b 1
 
 :PIPFAIL
 echo.
@@ -55,3 +67,6 @@ start https://www.python.org/downloads/
 exit /b 1
 
 :END
+echo.
+echo ツールを終了しました。この画面は閉じて構いません。
+timeout /t 5 >nul

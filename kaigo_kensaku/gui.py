@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -202,6 +203,10 @@ class App(ctk.CTk):
 
         self.city_area = ctk.CTkScrollableFrame(mid, height=200)
         self.city_area.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        # 「読み込み中」「該当なし」の表示。市区町村が0件のときにも使うので、
+        # チェックボックスとは別に、ここで必ず作っておく
+        self._empty_label = ctk.CTkLabel(self.city_area, text="", font=font(13),
+                                         text_color="#4a4a4a")
 
         # ---- 実行
         run_bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -327,15 +332,13 @@ class App(ctk.CTk):
         """
         word = self.filter_entry.get().strip() if hasattr(self, "filter_entry") else ""
         if set(self._boxes) != set(self.all_cities):
-            for w in self.city_area.winfo_children():
+            for w in self._boxes.values():
                 w.destroy()
-            self._boxes = {}
-            for c in self.all_cities:
-                self._boxes[c] = ctk.CTkCheckBox(
-                    self.city_area, text=c, variable=self.city_vars[c],
-                    font=font(13), command=self._update_count)
-            self._empty_label = ctk.CTkLabel(
-                self.city_area, text="", font=font(13), text_color="#4a4a4a")
+            self._boxes = {
+                c: ctk.CTkCheckBox(self.city_area, text=c, variable=self.city_vars[c],
+                                   font=font(13), command=self._update_count)
+                for c in self.all_cities
+            }
         for w in self._boxes.values():
             w.grid_remove()
         shown = [c for c in self.all_cities if not word or word in c]
@@ -344,8 +347,17 @@ class App(ctk.CTk):
             self._boxes[c].grid(row=i // 4, column=i % 4, sticky="w", padx=6, pady=3)
         self._empty_label.grid_remove()
         if not shown:
-            self._empty_label.configure(
-                text="（市区町村を読み込んでいます…）" if not self.all_cities else "（該当なし）")
+            if self.all_cities:
+                text = "（該当する市区町村がありません）"
+            elif self._loading_cities:
+                text = "市区町村を読み込んでいます…（初回のみ・1分ほどかかります）"
+            else:
+                # 取得に失敗した状態。読み込み中と区別しないと、
+                # 固まっているのか失敗したのかが利用者に分からない
+                text = ("市区町村を取得できませんでした。\n"
+                        "インターネット接続を確認して、"
+                        "［市区町村を取り直す］を押してください。")
+            self._empty_label.configure(text=text)
             self._empty_label.grid(row=0, column=0, sticky="w", padx=6, pady=6)
         self._update_count()
 
@@ -603,7 +615,30 @@ class App(ctk.CTk):
 
 
 def main():
-    App().mainloop()
+    """起動に失敗したときは、黙って閉じずに理由を見せる。
+
+    .bat から起動すると黒い画面がすぐ閉じてしまい、利用者には
+    「何も起きない」としか見えないため。
+    """
+    try:
+        App().mainloop()
+    except Exception:
+        detail = traceback.format_exc()
+        try:
+            log.exception("起動に失敗しました")
+        except Exception:
+            pass
+        print(detail)
+        try:
+            messagebox.showerror(
+                "起動できませんでした",
+                "ツールの画面を開けませんでした。\n"
+                "logs\\itakukaigokensaku.log を添えてご連絡ください。\n\n"
+                + detail[-600:],
+            )
+        except Exception:
+            pass
+        raise
 
 
 if __name__ == "__main__":

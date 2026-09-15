@@ -192,5 +192,59 @@ class TestGuiRun(unittest.TestCase):
         self.assertIn("停止", self.app.status.cget("text"))
 
 
+@unittest.skipUnless(gui_available(), "tkinter/customtkinter/画面が無いためスキップ")
+class TestFirstLaunch(unittest.TestCase):
+    """市区町村のキャッシュが無い状態（初めて使う人が必ず通る経路）で起動できること。
+
+    ここを試していなかったため、「実行しても画面が出ない」不具合を出した。
+    キャッシュがあるかないかで通る道が変わるので、両方を試すこと。
+    """
+
+    def setUp(self):
+        self.work = tempfile.mkdtemp()
+        shutil.copytree(os.path.join(BASE, "config"), os.path.join(self.work, "config"))
+        shutil.copy2(os.path.join(BASE, "settings.ini"), self.work)
+        # cities_cache は作らない（＝初回起動）
+        self.cache = os.path.join(self.work, "config", "cities_cache")
+        import gui
+        self.gui = gui
+        gui.BASE_DIR = self.work
+        gui.CACHE_DIR = self.cache
+        # 市区町村の取得でサイトへ行かないようにする（起動できるかだけを見る）
+        self._orig = gui.App._fetch_cities
+        gui.App._fetch_cities = lambda self, pref, code: None
+
+    def tearDown(self):
+        self.gui.App._fetch_cities = self._orig
+        shutil.rmtree(self.work, ignore_errors=True)
+
+    def test_starts_without_city_cache(self):
+        app = self.gui.App()
+        try:
+            app.update()
+            self.assertEqual(app.all_cities, [])
+            self.assertIn("読み込", app._empty_label.cget("text"))
+            self.assertEqual(app.run_btn.cget("state"), "disabled", "読み込み中は実行できない")
+        finally:
+            app._on_close()
+
+    def test_recovers_when_city_fetch_fails(self):
+        """市区町村の取得に失敗しても、画面が固まらず操作に戻れること。"""
+        app = self.gui.App()
+        try:
+            app.events.put(("log", "市区町村の取得に失敗しました: 通信エラー"))
+            app.events.put(("cities", []))
+            end = time.time() + 10
+            while time.time() < end and app.run_btn.cget("state") != "normal":
+                app.update()
+                time.sleep(0.05)
+            self.assertEqual(app.run_btn.cget("state"), "normal", "操作に戻れない")
+            # 「読み込み中」のままにせず、失敗したことと次の一手を示すこと
+            self.assertIn("取得できませんでした", app._empty_label.cget("text"))
+            self.assertIn("取り直す", app._empty_label.cget("text"))
+        finally:
+            app._on_close()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
