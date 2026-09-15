@@ -116,6 +116,53 @@ def diagnose(nav, settings: cfg.Settings, services) -> int:
     return 0
 
 
+def diagnose_detail(nav, settings: cfg.Settings, sd) -> int:
+    """詳細ページを1件だけ取得し、HTMLと読み取れた項目を書き出す。"""
+    from src.extract import harvest_html, main_heading
+
+    city = (settings.cities_raw or "").split(",")[0].strip().rstrip("*")
+    print(f"\n{city} / {sd.service_name} を1件だけ調べます…\n")
+    nav.search(city, sd.site_label, exact=(settings.search_type == "exact"))
+    listings = nav.collect_listings(max_pages=1)
+    if not listings:
+        print("検索結果が0件でした。『診断する.bat』を先に実行してください")
+        return 2
+
+    lst = listings[0]
+    print(f"対象: {lst.name or '(名称不明)'}  {lst.url}\n")
+    pages = nav.detail_pages(lst)
+
+    out_html = os.path.join(settings.base_dir, "詳細ページ.html")
+    with open(out_html, "w", encoding="utf-8") as f:
+        for i, html in enumerate(pages):
+            f.write(f"\n<!-- ===== ページ {i + 1} / {len(pages)} ===== -->\n")
+            f.write(html)
+
+    lines = [f"取得したページ数: {len(pages)}", f"事業所名(見出し): {main_heading(pages[0])}"]
+    lines.append("\n■ 同じ事業所の別ページへのリンク")
+    for u in nav._same_jigyosyo_links(lst):
+        lines.append("  " + u)
+    lines.append("\n■ ページ内のリンク・ボタン（表示文字）")
+    lines.append(nav.describe_page())
+    for i, html in enumerate(pages):
+        h = harvest_html(html)
+        lines.append(f"\n■ ページ{i + 1} で読み取れた見出し {len(h.kv)}件")
+        lines.append("  " + " / ".join(sorted(h.kv)[:120]))
+        lines.append(f"■ ページ{i + 1} の表（行×列）{len(h.matrix)}件")
+        lines.append("  " + " / ".join(f"{a}×{b}" for a, b in sorted(h.matrix)[:80]))
+    text = "\n".join(lines)
+
+    out_txt = os.path.join(settings.log_dir, "詳細ページ診断.txt")
+    os.makedirs(settings.log_dir, exist_ok=True)
+    with open(out_txt, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(text[:2500])
+    print("\n" + "-" * 62)
+    print(f"次の2つのファイルを送ってください:\n  {out_html}\n  {out_txt}")
+    print("-" * 62)
+    return 0
+
+
 def run(settings: cfg.Settings, args) -> int:
     from src.navigator import Navigator, SiteError  # Selenium は実行時に読み込む
 
@@ -138,7 +185,7 @@ def run(settings: cfg.Settings, args) -> int:
         print("取得するサービス種別が指定されていません")
         return 2
 
-    if args.diagnose:
+    if args.diagnose or args.diagnose_detail:
         settings.dump_html = True
     dump_dir = os.path.join(settings.log_dir, "html") if settings.dump_html else None
     nav = Navigator(
@@ -163,6 +210,8 @@ def run(settings: cfg.Settings, args) -> int:
     try:
         if args.diagnose:
             return diagnose(nav, settings, list(services.values()))
+        if args.diagnose_detail:
+            return diagnose_detail(nav, settings, list(services.values())[0])
 
         print(f"\n{settings.pref} の市区町村一覧を取得しています…")
         first_service = next(iter(services.values()))
@@ -275,6 +324,8 @@ def main() -> int:
     ap.add_argument("--restart", action="store_true", help="前回の進捗を破棄して最初から取得する")
     ap.add_argument("--list-cities", action="store_true", help="対象都道府県の市区町村一覧を表示する")
     ap.add_argument("--diagnose", action="store_true", help="検索画面の作りを調べて logs に書き出す")
+    ap.add_argument("--diagnose-detail", action="store_true",
+                    help="詳細ページを1件だけ取得して、そのHTMLと中身を書き出す")
     args = ap.parse_args()
 
     settings = cfg.load_settings(BASE_DIR)

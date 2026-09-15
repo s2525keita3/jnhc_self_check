@@ -622,45 +622,66 @@ class Navigator:
             log.debug("次ページへ (%d件取得済)", len(found))
         return list(found.values())
 
-    def detail_pages(self, listing: Listing) -> List[str]:
+    def _same_jigyosyo_links(self, listing: Listing) -> List[str]:
+        """同じ事業所の別ページ（タブ）へのリンクURLを集める。
+
+        タブの表示文字は当てにしない。`action_kouhyou_detail_*` を含み、
+        同じ事業所番号を持つURLは、ほぼ間違いなくタブである。
+        """
+        urls = []
+        for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
+            try:
+                href = a.get_attribute("href") or ""
+            except WebDriverException:
+                continue
+            if not href or not DETAIL_HREF.search(href):
+                continue
+            if href.rstrip("#") == listing.url.rstrip("#"):
+                continue
+            if listing.jigyosyo_cd and listing.jigyosyo_cd not in urllib.parse.unquote(href):
+                continue
+            urls.append(href)
+        return list(dict.fromkeys(urls))
+
+    def detail_pages(self, listing: Listing, max_tabs: int = 8) -> List[str]:
         """詳細ページの各タブのHTMLを返す。
 
-        タブはリンクとは限らない（ボタンやJavaScriptのこともある）ため、
-        表示文字をクリックして移動する。タブ列はどのタブでも表示され続けるので、
-        1タブずつ順にクリックしていけば全部まわれる。
+        タブの作りはサイトによって違う（リンク・ボタン・JavaScript）ため、
+        次の順で試す。
+          1. 同じ事業所番号を持つ詳細URLへのリンクを開く（表示文字に依存しない）
+          2. タブの表示文字をクリックする（リンクが無い作り向け）
         """
         pages = []
         self.get(listing.url)
         pages.append(self.html)
 
-        for label in NAV["detail_tabs"]:
-            if label == NAV["detail_tabs"][0]:
-                continue                      # 最初のタブは今開いている画面
-            moved = self._click_text([label], required=False)
-            if not moved:
-                moved = bool(self._in_frames(
-                    lambda lb=label: self._click_text([lb], required=False)
-                ))
-            if moved:
+        tab_urls = self._same_jigyosyo_links(listing)
+        if not tab_urls:
+            tab_urls = self._in_frames(
+                lambda: self._same_jigyosyo_links(listing) or None
+            ) or []
+        for url in tab_urls[:max_tabs]:
+            try:
+                self.get(url)
                 pages.append(self.html)
-            else:
-                log.debug("タブ『%s』が見つかりません", label)
+            except SiteError as e:
+                log.warning("タブ取得失敗: %s", e)
 
         if len(pages) == 1:
-            # クリックで移動できない作りのとき: リンクのURLを直接開く
-            tab_urls = []
-            for a in self.driver.find_elements(By.XPATH, "//a[@href]"):
-                try:
-                    t = (a.text or "").strip()
-                    href = a.get_attribute("href") or ""
-                except WebDriverException:
-                    continue
-                if t in NAV["detail_tabs"] and DETAIL_HREF.search(href) and href != listing.url:
-                    tab_urls.append(href)
-            for url in dict.fromkeys(tab_urls):
-                try:
-                    self.get(url)
+            # リンクが無い作り: 表示文字をクリックして移動する
+            seen_urls = {self.driver.current_url}
+            for label in NAV["detail_tabs"][1:]:
+                moved = self._click_text([label], required=False)
+                if not moved:
+                    moved = bool(self._in_frames(
+                        lambda lb=label: self._click_text([lb], required=False)
+                    ))
+                if moved and self.driver.current_url not in seen_urls:
+                    seen_urls.add(self.driver.current_url)
                     pages.append(self.html)
-                except SiteError as e:
-                    log.warning("タブ取得失敗: %s", e)
+        if len(pages) == 1:
+            log.warning(
+                "詳細ページのタブが見つかりません（%s）。"
+                "『詳細ページを調べる.bat』で画面を確認してください", listing.url
+            )
         return pages

@@ -9,7 +9,7 @@ LOCK_NAME = ".__itakukaigokensaku.lock"
 
 # 取得ロジックを変更したら上げる。これが違う進捗ファイルは読み捨てる
 # （古い取り方で集めたデータが再開時に混ざらないようにするため）
-DATA_VERSION = 2
+DATA_VERSION = 3
 
 
 class AlreadyRunning(RuntimeError):

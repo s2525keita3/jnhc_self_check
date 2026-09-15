@@ -152,6 +152,19 @@ class TestEndToEnd(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("神戸市中央区", r.stdout)
 
+    def test_diagnose_detail_option(self):
+        self._write_settings("西宮市", "居宅介護支援")
+        with MockSite("real") as site:
+            r = self._run(site, ["--diagnose-detail"])
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        html = os.path.join(self.work, "詳細ページ.html")
+        self.assertTrue(os.path.exists(html))
+        self.assertTrue(os.path.exists(os.path.join(self.work, "logs", "詳細ページ診断.txt")))
+        with open(html, encoding="utf-8") as f:
+            body = f.read()
+        self.assertIn("ページ 1 /", body)
+        self.assertIn("介護支援専門員", body)   # 詳細タブまで取れていること
+
     def test_diagnose_option(self):
         self._write_settings("西宮市", "居宅介護支援")
         with MockSite("link") as site:

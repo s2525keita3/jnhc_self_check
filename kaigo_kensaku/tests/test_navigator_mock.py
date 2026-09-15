@@ -191,6 +191,18 @@ class TestRealFlowVariant(MockFlowMixin, unittest.TestCase):
         self.assertEqual(rows[0]["市区町村"], "神戸市中央区")
 
 
+class TestImageTabVariant(MockFlowMixin, unittest.TestCase):
+    """タブが画像リンクで表示文字が無くても、同じ事業所番号のURLから辿れること。"""
+
+    variant = "imgtab"
+
+    def test_tabs_found_by_url(self):
+        rows = self.run_flow("西宮市", "居宅介護支援", 12)
+        self.assertEqual(rows[0]["常勤"], 2)
+        self.assertEqual(rows[0]["要介護２"], 19)
+        self.assertEqual(rows[0]["（Ⅱ）"], "あり")
+
+
 class TestIframeVariant(MockFlowMixin, unittest.TestCase):
     """検索フォームが iframe の中にあっても動くこと。"""
 

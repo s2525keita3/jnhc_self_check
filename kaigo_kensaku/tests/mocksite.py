@@ -8,6 +8,7 @@
   variant "link"     : 市区町村はリンク、次の画面でサービスを選び検索ボタン
   variant "select"   : プルダウンで市区町村とサービスを選び検索ボタン
   variant "deep"     : トップに「検索」リンクが無く、2階層たどらないと市区町村に届かない
+  variant "imgtab"   : 詳細タブが画像リンクで、表示文字が無い構成
   variant "deadnext" : 「次へ」が常に出るが同じページに戻る（無限ループ対策の確認用）
   variant "iframe"   : 検索フォームが iframe の中にある構成
   variant "pdftrap"  : トップにPDF等の紛らわしいリンクが並ぶ構成（誤追尾の確認用）
@@ -18,6 +19,7 @@
                        さらに実データで確認できた癖を再現する:
                          - 一覧のリンク文字が「情報を選択して概要を見る」
                          - 詳細タブがリンクではなくボタン（JavaScriptで移動）
+                         - タブの表示文字が当てにならない（画像タブ）
                          - 住所に市区町村名が無い行がある
   variant "textbox"  : 市区町村を文字で入力させる構成
   variant "textonly" : 市区町村は文字入力のみで、サービス種別を選ぶ部品が無い構成
@@ -364,7 +366,14 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, IndexError):
             return _page("<p>該当なし</p>")
         labels = ["事業所の概要", "事業所の特色", "事業所の詳細", "運営状況", "その他"]
-        if Handler.variant == "real":
+        if Handler.variant == "imgtab":
+            # タブが画像リンク: 表示文字では探せないが、同じ事業所番号のURLではある
+            tabs = "".join(
+                f"<a href='index.php?action_kouhyou_detail_0{n}_kani=true"
+                f"&JigyosyoCd={cd}'><img src='tab{n}.gif'></a> "
+                for n, label in enumerate(labels, start=22)
+            )
+        elif Handler.variant == "real":
             # 実サイトのタブはリンクではなくボタン（クリックしないと移動できない）
             tabs = "".join(
                 f"<button type='button' onclick=\"location.href='index.php?"
@@ -378,7 +387,7 @@ class Handler(BaseHTTPRequestHandler):
                 for n, label in enumerate(labels, start=22)
             )
         tabs = "<h1>介護事業所・生活関連情報検索</h1>" + tabs
-        if "detail_024" in self.path:
+        if "detail_024" in self.path or "detail_shosai" in self.path:
             body = _detail(city, svc, i)
         elif "detail_022" in self.path:
             body = _overview(city, svc, i)
