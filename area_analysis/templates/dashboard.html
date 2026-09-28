@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>訪問看護 地域分析</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #f6f5f2; --surface: #fcfcfb; --border: #e3e1db; --grid: #ecebe7;
+  --text: #0b0b0b; --text-2: #52514e; --muted: #85837d;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+  --closed: #a09e97; --band: rgba(42,120,214,.14);
+  --q1: #cde2fb; --q2: #86b6ef; --q3: #3987e5; --q4: #1c5cab; --q5: #0d366b;
+  --warn-bg: #fff4d6; --warn-text: #6b4a00;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111110; --surface: #1a1a19; --border: #2e2e2b; --grid: #2a2a27;
+    --text: #ffffff; --text-2: #c3c2b7; --muted: #8d8b84;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+    --closed: #6b6a64; --band: rgba(57,135,229,.2);
+    --q1: #184f95; --q2: #256abf; --q3: #3987e5; --q4: #86b6ef; --q5: #cde2fb;
+    --warn-bg: #3a2e0a; --warn-text: #f3d37a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111110; --surface: #1a1a19; --border: #2e2e2b; --grid: #2a2a27;
+  --text: #ffffff; --text-2: #c3c2b7; --muted: #8d8b84;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  --closed: #6b6a64; --band: rgba(57,135,229,.2);
+  --q1: #184f95; --q2: #256abf; --q3: #3987e5; --q4: #86b6ef; --q5: #cde2fb;
+  --warn-bg: #3a2e0a; --warn-text: #f3d37a;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.6 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 4px; }
+.sub { color: var(--text-2); font-size: 13px; margin: 0 0 12px; }
+.note { color: var(--muted); font-size: 12px; margin: 8px 0 0; }
+.demo { background: var(--warn-bg); color: var(--warn-text); padding: 10px 14px; border-radius: 8px;
+  margin: 12px 0 20px; font-size: 13px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px; margin-bottom: 16px; min-width: 0; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+.kpi .v { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--text-2); font-size: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 6px 12px; color: var(--text-2); cursor: pointer; font: inherit; font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+select, input[type=search] { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); color: var(--text); }
+.chip { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-2); margin-top: 6px; }
+.legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.sq { height: 10px; width: 10px; }
+svg text { fill: var(--text-2); font-size: 11px; }
+.chart-wrap { position: relative; }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.12);
+  display: none; white-space: nowrap; z-index: 5; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tbl-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--grid); text-align: left; white-space: nowrap; }
+th { color: var(--text-2); font-weight: 600; cursor: pointer; user-select: none; position: sticky; top: 0; background: var(--surface); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+.bar { display: flex; height: 10px; width: 120px; border-radius: 3px; overflow: hidden; gap: 1px; background: var(--grid); }
+.bar span { display: block; height: 100%; }
+#map { height: 520px; border-radius: 8px; }
+.pin { width: 22px; height: 22px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; border: 2px solid var(--surface); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.pin.closed { background: var(--closed) !important; opacity: .8; }
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 900px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.scroll-list { max-height: 460px; overflow: auto; }
+details summary { cursor: pointer; color: var(--text-2); font-size: 13px; margin-top: 8px; }
+a.btn { font-size: 13px; color: var(--s1); cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">訪問看護 地域分析</h1>
+  <p class="sub" id="subtitle"></p>
+  <div id="demo" class="demo" hidden>⚠ これは<strong>架空のデモデータ</strong>です。実在の事業所・実際の生存率ではありません。実データは <code>fetch.py</code> で取得してから <code>build.py</code> を実行してください。</div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section class="card" id="surv-card">
+    <h2>ステーションの生存曲線</h2>
+    <p class="sub" id="surv-sub"></p>
+    <div class="row">
+      <div class="seg" id="strata-seg" role="group" aria-label="層別"></div>
+      <span class="note" id="logrank"></span>
+    </div>
+    <div class="chart-wrap" id="surv-wrap"><svg id="surv" width="100%" height="340" role="img"></svg><div class="tip" id="surv-tip"></div></div>
+    <div class="legend" id="surv-legend"></div>
+    <details><summary>表で見る</summary><div class="tbl-scroll" id="surv-table"></div></details>
+    <p class="note">Kaplan-Meier推定。帯は全体の95%信頼区間。最初の名簿より前に開設していた事業所は、その時点の経過年数から観察に入れる（左側切断の補正）。廃止日は名簿から消えた月で、月単位の精度です。</p>
+  </section>
+
+  <section class="card">
+    <h2>区別の事業所数と営業先</h2>
+    <p class="sub">訪問看護1か所あたりの居宅介護支援事業所数が多い区ほど、紹介元の取り合いが緩い目安になります。</p>
+    <div class="tbl-scroll" id="ward-table"></div>
+  </section>
+
+  <section class="card">
+    <h2>現存ステーションの人員構成</h2>
+    <p class="sub">経験年数・採用/退職は介護サービス情報公表システムの項目。年代は公表されないため、ヒアリング等で入力できた分だけ表示します。</p>
+    <div class="row">
+      <select id="staff-ward"><option value="">全区</option></select>
+      <span class="legend" style="margin:0">
+        <span>経験年数:</span>
+        <span><i class="sq" style="background:var(--q1)"></i>1年未満</span>
+        <span><i class="sq" style="background:var(--q2)"></i>1-3年</span>
+        <span><i class="sq" style="background:var(--q3)"></i>3-5年</span>
+        <span><i class="sq" style="background:var(--q4)"></i>5-10年</span>
+        <span><i class="sq" style="background:var(--q5)"></i>10年以上</span>
+      </span>
+    </div>
+    <div class="tbl-scroll scroll-list" id="staff-table"></div>
+  </section>
+
+  <section class="card">
+    <h2>地図</h2>
+    <div class="row" id="map-filters"></div>
+    <div id="map"></div>
+    <p class="note">丸の中の文字で種別を区別（色だけに頼らない）。灰色は廃止済みのステーション。</p>
+  </section>
+
+  <section class="card">
+    <h2>営業先リスト</h2>
+    <div class="row">
+      <select id="f-cat"><option value="">全種別</option></select>
+      <select id="f-ward"><option value="">全区</option></select>
+      <input type="search" id="f-q" placeholder="名称・住所で検索">
+      <a class="btn" id="dl">CSVダウンロード</a>
+      <span class="note" id="f-count"></span>
+    </div>
+    <div class="tbl-scroll scroll-list" id="sales-table"></div>
+  </section>
+
+  <p class="note" id="footer"></p>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const DATA = /*__DATA__*/null;
+const $ = (s) => document.querySelector(s);
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const pct = (v) => (v == null ? "—" : Math.round(v * 100) + "%");
+const num = (v, d = 0) => (v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(d));
+const SERIES = ["--s1", "--s2", "--s3", "--s4", "--s5"];
+const CAT_MARK = { houkan: ["看", "--s1"], kyotaku: ["居", "--s2"], houkatsu: ["包", "--s3"],
+  hospital: ["病", "--s4"], clinic: ["診", "--s5"], soudan: ["相", "--s3"] };
+const STRATA_LABEL = { overall: "全体", cohort: "開設年代", corp_type: "法人種別", ward: "区" };
+
+// ---------------------------------------------------------------- header / KPI
+const A = DATA.area, M = DATA.survival_meta || {};
+$("#title").textContent = `${A.name} 訪問看護 地域分析`;
+document.title = `${A.name} 訪問看護分析`;
+$("#subtitle").textContent = `${A.prefecture}${A.name}（${A.wards.join("・")}）／ 作成 ${DATA.generated}`;
+$("#demo").hidden = !DATA.is_demo;
+const openNow = DATA.stations.filter((s) => !s.closed).length;
+const fac = DATA.facilities;
+const count = (c) => fac.filter((f) => f.category === c).length;
+$("#kpis").innerHTML = [
+  [openNow || count("houkan"), "現存ステーション"],
+  [M.closed ?? "—", `廃止（${M.first_month || "?"}〜）`],
+  [pct(M.s3), "3年生存率"], [pct(M.s5), "5年生存率"], [pct(M.s10), "10年生存率"],
+  [count("kyotaku"), "居宅介護支援"], [count("houkatsu"), "地域包括"],
+  [count("hospital") + count("clinic"), "病院・診療所"], [count("soudan"), "相談支援"],
+].map(([v, l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+$("#footer").textContent = "出典: 介護サービス情報公表システム、関東信越厚生局 コード内容別医療機関一覧表、医療情報ネット、障害福祉サービス等情報公表システム（各オープンデータ）を加工。";
+
+// ---------------------------------------------------------------- survival
+let strata = "overall";
+function survSeries() {
+  const S = DATA.survival;
+  if (!S || !S.overall) return [];
+  if (strata === "overall") return [{ name: "全体", n: M.n, closed: M.closed, curve: S.overall, color: "--s1" }];
+  const g = S.strata[strata].groups;
+  return Object.keys(g).sort().slice(0, 5).map((k, i) => ({ name: k, ...g[k], color: SERIES[i] }));
+}
+function drawSurvival() {
+  const svg = $("#surv"), W = svg.clientWidth || 800, H = 340, m = { l: 44, r: 16, t: 12, b: 36 };
+  const series = survSeries();
+  if (!series.length) { svg.innerHTML = `<text x="16" y="30">生存分析には月次名簿が2か月分以上必要です</text>`; return; }
+  const tMax = Math.min(15, Math.max(5, ...series.flatMap((s) => s.curve.map((p) => Math.ceil(p.t)))));
+  const x = (t) => m.l + (Math.min(t, tMax) / tMax) * (W - m.l - m.r);
+  const y = (s) => m.t + (1 - s) * (H - m.t - m.b);
+  let h = "";
+  for (let v = 0; v <= 1.0001; v += 0.25) h += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="${css("--grid")}"/><text x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v * 100}%</text>`;
+  for (let t = 0; t <= tMax; t += tMax > 10 ? 2 : 1) h += `<text x="${x(t)}" y="${H - m.b + 16}" text-anchor="middle">${t}</text>`;
+  h += `<text x="${W - m.r}" y="${H - 4}" text-anchor="end">開設からの年数</text>`;
+  const step = (pts, key) => {
+    let d = `M${x(0)},${y(pts[0][key])}`;
+    for (let i = 1; i < pts.length; i++) d += `H${x(pts[i].t)}V${y(pts[i][key])}`;
+    return d + `H${x(tMax)}`;
+  };
+  if (strata === "overall") {
+    const c = series[0].curve;
+    let d = `M${x(0)},${y(c[0].hi)}`;
+    for (let i = 1; i < c.length; i++) d += `H${x(c[i].t)}V${y(c[i].hi)}`;
+    d += `H${x(tMax)}V${y(c[c.length - 1].lo)}`;
+    for (let i = c.length - 1; i >= 1; i--) d += `H${x(c[i].t)}V${y(c[i - 1].lo)}`;
+    h += `<path d="${d}H${x(0)}Z" fill="${css("--band")}"/>`;
+  }
+  series.forEach((s) => {
+    h += `<path d="${step(s.curve, "s")}" fill="none" stroke="${css(s.color)}" stroke-width="2" stroke-linejoin="round"/>`;
+  });
+  h += `<line id="xhair" y1="${m.t}" y2="${H - m.b}" stroke="${css("--muted")}" stroke-dasharray="3 3" visibility="hidden"/>`;
+  h += `<rect x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent" id="hit"/>`;
+  svg.innerHTML = h;
+  $("#surv-legend").innerHTML = series.map((s) => `<span><i style="background:${css(s.color)}"></i>${esc(s.name)}（${s.n}件・廃止${s.closed}）</span>`).join("");
+  const at = (curve, t) => { let p = curve[0]; for (const q of curve) if (q.t <= t) p = q; return p; };
+  const tip = $("#surv-tip"), hit = $("#hit"), xh = $("#xhair");
+  hit.onmousemove = (e) => {
+    const r = svg.getBoundingClientRect(), px = e.clientX - r.left;
+    const t = Math.max(0, Math.min(tMax, ((px - m.l) / (W - m.l - m.r)) * tMax));
+    xh.setAttribute("x1", x(t)); xh.setAttribute("x2", x(t)); xh.setAttribute("visibility", "visible");
+    tip.innerHTML = `<div>開設 ${t.toFixed(1)} 年時点</div>` + series.map((s) => {
+      const p = at(s.curve, t);
+      return `<div><span style="color:${css(s.color)}">●</span> ${esc(s.name)} <b>${pct(p.s)}</b>${strata === "overall" ? `（${pct(p.lo)}–${pct(p.hi)}）` : ""}</div>`;
+    }).join("");
+    tip.style.display = "block";
+    tip.style.left = Math.min(px + 14, W - tip.offsetWidth - 4) + "px";
+    tip.style.top = "12px";
+  };
+  hit.onmouseleave = () => { tip.style.display = "none"; xh.setAttribute("visibility", "hidden"); };
+  const years = [1, 3, 5, 10];
+  $("#surv-table").innerHTML = `<table><tr><th>系列</th><th class="n">件数</th><th class="n">廃止</th>${years.map((y) => `<th class="n">${y}年</th>`).join("")}</tr>` +
+    series.map((s) => `<tr><td>${esc(s.name)}</td><td class="n">${s.n}</td><td class="n">${s.closed}</td>${years.map((y) => `<td class="n">${pct(at(s.curve, y).s)}</td>`).join("")}</tr>`).join("") + "</table>";
+  const p = strata !== "overall" && DATA.survival.strata[strata] ? DATA.survival.strata[strata].p : null;
+  $("#logrank").textContent = p == null ? "" : `log-rank検定 p=${p}${p < 0.05 ? "（差あり）" : "（有意差なし）"}`;
+}
+if (DATA.survival && DATA.survival.overall) {
+  $("#surv-sub").textContent = `${M.source}／${M.first_month}〜${M.last_month}の月次名簿${M.n_snapshots}本から、${M.n}事業所（うち廃止${M.closed}）`;
+  const keys = ["overall", ...Object.keys(DATA.survival.strata)];
+  $("#strata-seg").innerHTML = keys.map((k) => `<button data-k="${k}" aria-pressed="${k === strata}">${STRATA_LABEL[k] || k}</button>`).join("");
+  $("#strata-seg").onclick = (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    strata = b.dataset.k;
+    document.querySelectorAll("#strata-seg button").forEach((x) => x.setAttribute("aria-pressed", x.dataset.k === strata));
+    drawSurvival();
+  };
+} else {
+  $("#surv-sub").textContent = "月次名簿が不足しているため生存曲線を計算できません。";
+}
+drawSurvival();
+addEventListener("resize", drawSurvival);
+
+// ---------------------------------------------------------------- wards
+(() => {
+  const cols = [["ward", "区"], ["houkan", "訪問看護"], ["houkan_closed", "うち期間内廃止"], ["kyotaku", "居宅"],
+    ["kyotaku_per_houkan", "居宅/訪看"], ["houkatsu", "包括"], ["hospital", "病院"], ["clinic", "診療所"], ["soudan", "相談支援"]];
+  $("#ward-table").innerHTML = `<table><tr>${cols.map(([k, l], i) => `<th class="${i ? "n" : ""}">${l}</th>`).join("")}</tr>` +
+    DATA.wards.map((r) => `<tr>${cols.map(([k], i) => `<td class="${i ? "n" : ""}">${r[k] ?? "—"}</td>`).join("")}</tr>`).join("") + "</table>";
+})();
+
+// ---------------------------------------------------------------- staff
+const wardOpts = A.wards.map((w) => `<option>${w}</option>`).join("");
+$("#staff-ward").insertAdjacentHTML("beforeend", wardOpts);
+let staffSort = ["看護職員_常勤換算", -1];
+function stackBar(vals, vars) {
+  const tot = vals.reduce((a, b) => a + (b || 0), 0);
+  if (!tot) return "—";
+  return `<div class="bar" title="${vals.map((v) => v || 0).join(" / ")}">${vals.map((v, i) => v ? `<span style="width:${(v / tot) * 100}%;background:var(${vars[i]})"></span>` : "").join("")}</div>`;
+}
+function drawStaff() {
+  const w = $("#staff-ward").value;
+  const rows = DATA.stations.filter((s) => !s.closed && (!w || s.ward === w));
+  const [k, dir] = staffSort;
+  rows.sort((a, b) => ((a[k] ?? -1e9) > (b[k] ?? -1e9) ? 1 : -1) * dir);
+  const Q = ["--q1", "--q2", "--q3", "--q4", "--q5"];
+  const cols = [
+    ["name", "事業所", (s) => esc(s.name)], ["ward", "区", (s) => s.ward],
+    ["duration_y", "経過年数", (s) => num(s.duration_y, 1), 1], ["corp_type", "法人", (s) => s.corp_type],
+    ["看護職員_常勤換算", "看護 常勤換算", (s) => num(s["看護職員_常勤換算"], 1), 1],
+    ["常勤比率", "常勤比率", (s) => pct(s["常勤比率"]), 1],
+    ["経験5年未満割合", "経験構成", (s) => stackBar(["経験_1年未満", "経験_1-3年", "経験_3-5年", "経験_5-10年", "経験_10年以上"].map((c) => s[c]), Q)],
+    ["経験5年未満割合", "経験5年未満", (s) => pct(s["経験5年未満割合"]), 1],
+    ["離職率", "前年度離職率", (s) => pct(s["離職率"]), 1],
+    ["年代_回答数", "年代（20代→60代+）", (s) => stackBar(["年代_20代", "年代_30代", "年代_40代", "年代_50代", "年代_60代以上"].map((c) => s[c]), Q)],
+  ];
+  $("#staff-table").innerHTML = `<table><tr>${cols.map(([c, l, , n]) => `<th class="${n ? "n" : ""}" data-k="${c}">${l}${c === k ? (dir > 0 ? " ▲" : " ▼") : ""}</th>`).join("")}</tr>` +
+    rows.map((s) => `<tr>${cols.map(([, , f, n]) => `<td class="${n ? "n" : ""}">${f(s) ?? "—"}</td>`).join("")}</tr>`).join("") + "</table>" +
+    (rows.length ? "" : `<p class="note">人員データがありません（data/raw/staff.csv を用意してください）。</p>`);
+}
+$("#staff-table").onclick = (e) => {
+  const th = e.target.closest("th"); if (!th) return;
+  staffSort = [th.dataset.k, staffSort[0] === th.dataset.k ? -staffSort[1] : -1];
+  drawStaff();
+};
+$("#staff-ward").onchange = drawStaff;
+drawStaff();
+
+// ---------------------------------------------------------------- map
+(() => {
+  if (!window.L) { $("#map").innerHTML = `<p class="note">地図ライブラリを読み込めませんでした（オフライン）。</p>`; return; }
+  const map = L.map("map").setView(A.center, 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "© OpenStreetMap contributors", maxZoom: 18 }).addTo(map);
+  const icon = (cat, closed) => L.divIcon({ className: "", iconSize: [22, 22],
+    html: `<div class="pin ${closed ? "closed" : ""}" style="background:${css(CAT_MARK[cat][1])}">${closed ? "×" : CAT_MARK[cat][0]}</div>` });
+  const layers = {};
+  const add = (key, label, items) => {
+    const g = L.layerGroup();
+    items.filter((f) => f.lat && f.lon).forEach((f) => g.addLayer(L.marker([f.lat, f.lon], { icon: icon(f.category || "houkan", f.closed) })
+      .bindPopup(`<b>${esc(f.name)}</b><br>${esc(f.address)}${f.corp ? "<br>" + esc(f.corp) : ""}${f.start ? `<br>開設 ${f.start}${f.closed ? ` → 廃止 ${f.end}` : ""}` : ""}${f.beds ? `<br>病床 ${f.beds}` : ""}`)));
+    layers[key] = { g, label, n: g.getLayers().length };
+  };
+  add("houkan", "訪問看護（現存）", DATA.stations.filter((s) => !s.closed));
+  add("houkan_closed", "訪問看護（廃止）", DATA.stations.filter((s) => s.closed));
+  ["kyotaku", "houkatsu", "hospital", "clinic", "soudan"].forEach((c) => add(c, DATA.categories[c], fac.filter((f) => f.category === c)));
+  const on = new Set(["houkan", "houkan_closed", "kyotaku", "houkatsu"]);
+  $("#map-filters").innerHTML = Object.entries(layers).map(([k, v]) =>
+    `<label class="chip"><input type="checkbox" data-k="${k}" ${on.has(k) ? "checked" : ""}>${v.label}（${v.n}）</label>`).join("");
+  Object.entries(layers).forEach(([k, v]) => on.has(k) && v.g.addTo(map));
+  $("#map-filters").onchange = (e) => { const v = layers[e.target.dataset.k]; e.target.checked ? v.g.addTo(map) : map.removeLayer(v.g); };
+  if (DATA.own) L.marker([DATA.own.lat, DATA.own.lon]).addTo(map).bindPopup(esc(DATA.own.name));
+})();
+
+// ---------------------------------------------------------------- sales list
+Object.entries(DATA.categories).filter(([k]) => k !== "houkan").forEach(([k, v]) => $("#f-cat").insertAdjacentHTML("beforeend", `<option value="${k}">${v}</option>`));
+$("#f-ward").insertAdjacentHTML("beforeend", wardOpts);
+let salesRows = [];
+function drawSales() {
+  const c = $("#f-cat").value, w = $("#f-ward").value, q = $("#f-q").value.trim();
+  salesRows = fac.filter((f) => (!c || f.category === c) && (!w || f.ward === w) && (!q || (f.name + f.address).includes(q)));
+  const hasDist = salesRows.some((f) => f.distance_km != null);
+  $("#f-count").textContent = `${salesRows.length}件`;
+  $("#sales-table").innerHTML = `<table><tr><th>種別</th><th>名称</th><th>区</th><th>住所</th><th>法人</th><th class="n">病床</th>${hasDist ? '<th class="n">距離km</th>' : ""}<th>電話</th></tr>` +
+    salesRows.slice(0, 500).map((f) => `<tr><td>${esc(DATA.categories[f.category])}</td><td>${esc(f.name)}</td><td>${esc(f.ward)}</td><td>${esc(f.address)}</td><td>${esc(f.corp)}</td><td class="n">${f.beds || ""}</td>${hasDist ? `<td class="n">${num(f.distance_km, 1)}</td>` : ""}<td>${esc(f.phone)}</td></tr>`).join("") + "</table>";
+}
+["#f-cat", "#f-ward"].forEach((s) => ($(s).onchange = drawSales));
+$("#f-q").oninput = drawSales;
+$("#dl").onclick = () => {
+  const cols = ["category", "name", "ward", "address", "corp", "beds", "phone", "distance_km"];
+  const csv = "﻿" + [cols.join(",")].concat(salesRows.map((f) => cols.map((k) => `"${String(k === "category" ? DATA.categories[f[k]] : f[k] ?? "").replace(/"/g, '""')}"`).join(","))).join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `営業先_${A.name}.csv`; a.click();
+};
+drawSales();
+</script>
+</body>
+</html>
